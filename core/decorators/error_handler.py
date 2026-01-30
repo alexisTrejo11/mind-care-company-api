@@ -32,10 +32,14 @@ def api_error_handler(view_func: Callable) -> Callable:
         try:
             return view_func(self, request, *args, **kwargs)
 
-        # Error handling for custom MindCare exceptions
         except MindCareBaseException as e:
+            log_level = getattr(e, "log_level", "warning")
+            # Convert string log level to integer if needed
+            if isinstance(log_level, str):
+                log_level = getattr(logging, log_level.upper(), logging.WARNING)
+
             logger.log(
-                getattr(e, "log_level", "warning"),
+                log_level,
                 f"{e.__class__.__name__}: {e.detail}",
                 extra={"metadata": getattr(e, "metadata", {})},
             )
@@ -45,7 +49,6 @@ def api_error_handler(view_func: Callable) -> Callable:
                 code=getattr(e, "default_code", "error"),
                 status_code=e.status_code,
                 metadata=getattr(e, "metadata", {}),
-                headers=getattr(e, "headers", {}),
             )
 
         except DRFValidationError as e:

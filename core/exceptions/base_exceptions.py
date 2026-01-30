@@ -28,6 +28,12 @@ class AuthorizationError(MindCareBaseException):
     default_code = "authorization_error"
 
 
+class PrivacyError(MindCareBaseException):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "Privacy violation detected"
+    default_code = "privacy_error"
+
+
 class TokenError(AuthenticationError):
     default_detail = "Invalid or expired token"
     default_code = "token_error"
@@ -52,6 +58,12 @@ class BusinessRuleError(MindCareBaseException):
     default_code = "business_rule_violation"
 
 
+class PaymentError(MindCareBaseException):
+    status_code = status.HTTP_402_PAYMENT_REQUIRED
+    default_detail = "Payment processing error"
+    default_code = "payment_error"
+
+
 class ConflictError(MindCareBaseException):
     status_code = status.HTTP_409_CONFLICT
     default_detail = "Conflict error"
@@ -61,6 +73,12 @@ class ConflictError(MindCareBaseException):
 class UserNotFoundError(ValidationError):
     default_detail = "User not found"
     default_code = "user_not_found"
+
+
+class NotificationError(MindCareBaseException):
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    default_detail = "Notification error"
+    default_code = "notification_error"
 
 
 # Rate Limiting

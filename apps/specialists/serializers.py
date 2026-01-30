@@ -11,7 +11,7 @@ from .models import Specialist, Service, SpecialistService, Availability
 from .validators import (
     validate_license_number,
     validate_consultation_fee,
-    validate_service_duration,
+    validate_service_duration_mins,
     validate_specialization_combo,
 )
 
@@ -42,7 +42,7 @@ class ServiceSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def validate_duration_minutes(self, value):
-        validate_service_duration(value)
+        validate_service_duration_mins(value)
         return value
 
     def validate_base_price(self, value):
