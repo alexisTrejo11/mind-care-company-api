@@ -1,23 +1,14 @@
-from django.urls import path
-from . import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views.specialists_views import SpecialistViewSet
+from .views.clinic_services_views import ServiceViewSet
+
+router = DefaultRouter()
+
+
+router.register(r"specialists", SpecialistViewSet, basename="specialist")
+router.register(r"services", ServiceViewSet, basename="service")
 
 urlpatterns = [
-    # Specialist Management
-    path('specialists/', views.SpecialistListView.as_view(), name='specialist-list'),
-    path('specialists/<int:specialist_id>/', views.SpecialistDetailView.as_view(), name='specialist-detail'),
-    path('specialists/create/', views.SpecialistCreateView.as_view(), name='specialist-create'),
-    path('specialists/<int:specialist_id>/update/', views.SpecialistUpdateView.as_view(), name='specialist-update'),
-    
-    
-    # Disponibility
-    path('specialists/<int:specialist_id>/availability/', views.AvailabilityListView.as_view(), name='availability-list'),
-    path('specialists/<int:specialist_id>/available-slots/', views.AvailableSlotsView.as_view(), name='available-slots'),
-    
-    # Services
-    path('services/', views.ServiceListView.as_view(), name='service-list'),
-    path('services/create/', views.ServiceCreateView.as_view(), name='service-create'),
-    path('specialists/<int:specialist_id>/services/', views.SpecialistServicesView.as_view(), name='specialist-services'),
-    
-    # Scpecialist Profile
-    path('specialists/me/', views.MySpecialistProfileView.as_view(), name='my-specialist-profile'),
+    path("api/v2/", include(router.urls)),
 ]

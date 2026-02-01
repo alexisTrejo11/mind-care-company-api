@@ -12,37 +12,32 @@ class ServiceService:
     """Service management service"""
 
     @staticmethod
-    def create_service(
-        name: str, category: str, duration_minutes: int, base_price: float, **kwargs
-    ) -> Service:
-        """
-        Create a new service
-        """
-        try:
-            existing = Service.objects.filter(
-                name__iexact=name, category=category
-            ).exists()
+    def create_service(**kwargs) -> Service:
+        # TODO: Add any additional business logic or validations here
+        service = Service.objects.create(**kwargs)
 
-            if existing:
-                raise ConflictError(
-                    detail="Service with this name and category already exists",
-                    code="service_exists",
-                )
+        logger.info(f"Service created: {service.pk} - {service.name}")
 
-            service = Service.objects.create(
-                name=name,
-                category=category,
-                duration_minutes=duration_minutes,
-                base_price=base_price,
-                **kwargs,
-            )
+        service.save()
+        service.refresh_from_db()
 
-            logger.info(f"Service created: {service.pk} - {service.name}")
+        logger.info(f"Service persisted in database: {service.pk}")
 
-            return service
+        return service
 
-        except DjangoValidationError as e:
-            raise ValidationError(detail=str(e))
+    @staticmethod
+    def update_service(service: Service, **kwargs) -> Service:
+        for key, value in kwargs.items():
+            setattr(service, key, value)
+
+        logger.info(f"Updating service: {service.pk} - {service.name}")
+
+        service.save()
+        service.refresh_from_db()
+
+        logger.info(f"Service updated in database: {service.pk}")
+
+        return service
 
     @staticmethod
     def get_services_by_category(

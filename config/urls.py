@@ -21,7 +21,7 @@ from django.urls import path
 
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("api/v2/admin/", admin.site.urls),
 ]
 
 urlpatterns += specialists_urls.urlpatterns

@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from datetime import timedelta
-import uuid
+from decimal import Decimal
 
 User = get_user_model()
 
@@ -56,19 +56,31 @@ class Bill(models.Model):
         max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
     )
     tax_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0)],
     )
     discount_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0)],
     )
     total_amount = models.DecimalField(
         max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
     )
     amount_paid = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0)],
     )
     balance_due = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0)],
     )
 
     # Status
@@ -89,10 +101,16 @@ class Bill(models.Model):
     policy_number = models.CharField(max_length=50, blank=True, null=True)
     insurance_claim_id = models.CharField(max_length=100, blank=True, null=True)
     insurance_coverage = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0)],
     )
     patient_responsibility = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0)],
     )
 
     # Dates
@@ -233,7 +251,10 @@ class BillItem(models.Model):
     bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name="items")
     description = models.CharField(max_length=200)
     quantity = models.DecimalField(
-        max_digits=10, decimal_places=2, default=1, validators=[MinValueValidator(0.01)]
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        validators=[MinValueValidator(0.01)],
     )
     unit_price = models.DecimalField(
         max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
@@ -241,14 +262,14 @@ class BillItem(models.Model):
     tax_rate = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        default=0,
-        validators=[MinValueValidator(0), models.MaxValueValidator(100)],
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
     discount_rate = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        default=0,
-        validators=[MinValueValidator(0), models.MaxValueValidator(100)],
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
 
     # Calculated fields
@@ -588,12 +609,14 @@ class InsuranceClaim(models.Model):
         max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
     )
     insurance_responsibility = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
     )
     patient_responsibility = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
     )
-    denied_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    denied_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
 
     # Status
     status = models.CharField(
