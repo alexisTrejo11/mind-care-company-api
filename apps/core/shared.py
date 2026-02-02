@@ -137,38 +137,6 @@ def rate_limit_key(identifier, action):
     return f"rate_limit:{action}:{identifier}"
 
 
-def check_rate_limit(identifier, action, max_attempts=5, window=3600):
-    """
-    Check if action is rate limited
-    Returns (is_limited, attempts_left, retry_after)
-    """
-    key = rate_limit_key(identifier, action)
-    attempts = cache.get(key, 0)
-
-    if attempts >= max_attempts:
-        ttl = cache.ttl(key)
-        return True, 0, ttl
-
-    return False, max_attempts - attempts, None
-
-
-def increment_rate_limit(identifier, action, window=3600):
-    """
-    Increment rate limit counter
-    """
-    key = rate_limit_key(identifier, action)
-    attempts = cache.get(key, 0)
-    cache.set(key, attempts + 1, timeout=window)
-
-
-def clear_rate_limit(identifier, action):
-    """
-    Clear rate limit for successful action
-    """
-    key = rate_limit_key(identifier, action)
-    cache.delete(key)
-
-
 def assert_datetime_with_timezone(dt, field_name="datetime"):
     """
     Assert that a datetime object is timezone-aware

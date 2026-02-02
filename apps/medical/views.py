@@ -4,13 +4,13 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
-from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.core.decorators.error_handler import api_error_handler
 from apps.core.decorators.rate_limit import rate_limit
 from apps.core.responses.api_response import APIResponse
+from apps.core.exceptions.base_exceptions import PrivacyError
 from .models import MedicalRecord
 from .serializers import (
     MedicalRecordSerializer,
@@ -92,7 +92,6 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         filter_serializer = MedicalRecordFilterSerializer(data=request.query_params)
         filter_serializer.is_valid(raise_exception=True)
 
-        # Get filtered records with business logic
         records = MedicalRecordService.get_filtered_records(
             user=request.user, filters=filter_serializer.validated_data
         )
@@ -117,7 +116,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 
         # Check access with business logic
         if not MedicalRecordService.can_access_record(request.user, instance):
-            raise PermissionDenied("You do not have permission to view this record")
+            raise PrivacyError("You do not have permission to view this record")
 
         serializer = self.get_serializer(instance)
 
@@ -185,7 +184,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     def patient_records(self, request):
         """Get medical records for current patient"""
         if request.user.user_type != "patient":
-            raise PermissionDenied("Only patients can access their own records")
+            raise PrivacyError("Only patients can access their own records")
 
         queryset = self.get_queryset()
         page = self.paginate_queryset(queryset)
@@ -273,7 +272,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 
         # Check permissions
         if request.user.user_type != "admin":
-            raise PermissionDenied("Only admins can change confidentiality level")
+            raise PrivacyError("Only admins can change confidentiality level")
 
         new_level = request.data.get("confidentiality_level")
         if not new_level or new_level not in dict(
@@ -336,7 +335,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     def audit_log(self, request):
         """Get audit log for medical records (admin only)"""
         if request.user.user_type != "admin":
-            raise PermissionDenied("Only admins can access audit logs")
+            raise PrivacyError("Only admins can access audit logs")
 
         # Validate audit parameters
         audit_serializer = MedicalRecordAuditSerializer(data=request.query_params)

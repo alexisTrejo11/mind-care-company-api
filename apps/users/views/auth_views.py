@@ -68,3 +68,35 @@ class UserLogoutView(APIView):
         token.blacklist()
 
         return APIResponse.success(message="Logout successful")
+
+
+class RefreshTokenView(APIView):
+    """
+    POST api/auth/token/refresh/
+    Refresh JWT access token using refresh token
+    """
+
+    permission_classes = [AllowAny]
+
+    @api_error_handler
+    @rate_limit(profile="SENSITIVE", scope="token_refresh")
+    def post(self, request):
+        """Refrescar token de acceso"""
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+
+        refresh_token = request.data.get("refresh_token")
+
+        if not refresh_token:
+            raise ValidationError(detail="Refresh token is required")
+
+        try:
+            token = RefreshToken(refresh_token)
+            new_access_token = str(token.access_token)
+        except TokenError:
+            raise ValidationError(detail="Invalid refresh token")
+
+        return APIResponse.success(
+            message="Token refreshed successfully",
+            data={"access_token": new_access_token},
+        )

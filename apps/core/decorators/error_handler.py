@@ -3,9 +3,11 @@ import logging
 from typing import Callable, Any
 from django.db import transaction, DatabaseError
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http.response import Http404
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework import status
+
 
 from apps.core.exceptions.base_exceptions import (
     MindCareBaseException,
@@ -49,6 +51,14 @@ def api_error_handler(view_func: Callable) -> Callable:
                 code=getattr(e, "default_code", "error"),
                 status_code=e.status_code,
                 metadata=getattr(e, "metadata", {}),
+            )
+        except Http404 as e:
+            # Handle Django Http404 exceptions
+            logger.warning(f"Http404 error: {str(e)}")
+            return APIResponse.error(
+                message="Resource not found",
+                code="not_found",
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
         except DRFValidationError as e:

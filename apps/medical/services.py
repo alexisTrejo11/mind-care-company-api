@@ -1,13 +1,14 @@
+import logging
 from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Count, F
-from django.core.exceptions import PermissionDenied
 
 from .models import MedicalRecord
 from apps.appointments.models import Appointment
 from apps.core.exceptions.base_exceptions import (
     BusinessRuleError,
+    PrivacyError,
     ValidationError,
     NotFoundError,
     AuthorizationError,
@@ -15,46 +16,70 @@ from apps.core.exceptions.base_exceptions import (
 from django.db.models.functions import Length
 from django.db.models import Avg
 
+logger = logging.getLogger(__name__)
+
 
 class MedicalRecordService:
     """Service layer for medical record business logic"""
 
-    # Edit window for specialists (24 hours)
     EDIT_WINDOW_HOURS = 24
-
-    # Minimum diagnosis length
     MIN_DIAGNOSIS_LENGTH = 10
-
-    # Confidentiality access levels
     CONFIDENTIALITY_LEVELS = {"standard": 1, "sensitive": 2, "highly_sensitive": 3}
 
     @staticmethod
     def can_access_record(user, medical_record):
         """Check if user can access medical record"""
         if not user or not user.is_authenticated:
+            logger.info(
+                f"Access denied to medical record {medical_record.id}: User not authenticated"
+            )
             return False
 
         # Admin can access everything
         if user.user_type == "admin":
+            logger.info(
+                f"Admin {user.email} accessing medical record {medical_record.id}"
+            )
             return True
 
         # Patient can access their own records
         if user.user_type == "patient" and medical_record.patient == user:
             # Patients can't access highly sensitive records
             if medical_record.confidentiality_level == "highly_sensitive":
+                logger.info(
+                    f"Patient {user.email} denied access to highly sensitive record {medical_record.id}"
+                )
                 return False
+            logger.info(
+                f"Patient {user.email} accessing own medical record {medical_record.id}"
+            )
             return True
 
         # Specialist can access records they created
         if user.user_type == "specialist":
             if hasattr(user, "specialist_profile"):
                 if medical_record.specialist == user.specialist_profile:
+                    logger.info(
+                        f"Specialist {user.email} accessing their medical record {medical_record.id}"
+                    )
                     return True
 
         # Staff can access standard records only
         if user.user_type == "staff":
-            return medical_record.confidentiality_level == "standard"
+            can_access = medical_record.confidentiality_level == "standard"
+            if can_access:
+                logger.info(
+                    f"Staff {user.email} accessing standard medical record {medical_record.id}"
+                )
+            else:
+                logger.info(
+                    f"Staff {user.email} denied access to non-standard record {medical_record.id}"
+                )
+            return can_access
 
+        logger.info(
+            f"User {user.email} ({user.user_type}) denied access to medical record {medical_record.id}"
+        )
         return False
 
     @staticmethod
@@ -80,41 +105,57 @@ class MedicalRecordService:
 
     @staticmethod
     def can_delete_record(user, medical_record):
-        """Check if user can delete medical record"""
-        # Medical records should rarely be deleted (HIPAA compliance)
-        # Only admins can delete, and only with audit trail
+        today = timezone.now().date()
+
+        # Can only delete if created today
+        if medical_record.created_at.date() > today:
+            return False
+
         return user.user_type == "admin"
 
     @staticmethod
     def validate_record_creation(user, appointment):
         """Validate if medical record can be created"""
         if not user or not user.is_authenticated:
+            logger.warning(
+                f"Unauthenticated attempt to create medical record for appointment {appointment.id}"
+            )
             raise AuthorizationError(detail="Authentication required")
 
-        # Check if appointment is completed
         if appointment.status != "completed":
+            logger.warning(
+                f"Attempt to create medical record for non-completed appointment {appointment.id} (status: {appointment.status})"
+            )
             raise BusinessRuleError(
                 detail="Medical records can only be created for completed appointments"
             )
 
-        # Check if record already exists
         if MedicalRecord.objects.filter(appointment=appointment).exists():
+            logger.warning(
+                f"Attempt to create duplicate medical record for appointment {appointment.id}"
+            )
             raise BusinessRuleError(
                 detail="Medical record already exists for this appointment"
             )
 
-        # Check if user is the treating specialist
         if user.user_type == "specialist":
             if not hasattr(user, "specialist_profile"):
+                logger.error(
+                    f"User {user.email} marked as specialist but has no profile"
+                )
                 raise ValidationError(detail="Specialist profile not found")
 
             if appointment.specialist != user.specialist_profile:
+                logger.warning(
+                    f"Specialist {user.email} attempted to create record for another specialist's appointment {appointment.id}"
+                )
                 raise AuthorizationError(
                     detail="You can only create records for your own appointments"
                 )
-
-        # Admin can create records for any completed appointment
         elif user.user_type != "admin":
+            logger.warning(
+                f"User {user.email} ({user.user_type}) unauthorized to create medical records"
+            )
             raise AuthorizationError(
                 detail="Only specialists or admins can create medical records"
             )
@@ -123,6 +164,9 @@ class MedicalRecordService:
     def validate_diagnosis_content(diagnosis):
         """Validate diagnosis content"""
         if len(diagnosis.strip()) < MedicalRecordService.MIN_DIAGNOSIS_LENGTH:
+            logger.warning(
+                f"Diagnosis validation failed: too short ({len(diagnosis.strip())} chars)"
+            )
             raise ValidationError(
                 detail=f"Diagnosis must be at least {MedicalRecordService.MIN_DIAGNOSIS_LENGTH} characters"
             )
@@ -131,8 +175,12 @@ class MedicalRecordService:
         required_keywords = ["diagnosis", "assessment", "findings"]
         has_keyword = any(keyword in diagnosis.lower() for keyword in required_keywords)
         if not has_keyword:
+            logger.warning(
+                "Diagnosis validation failed: missing required assessment keywords"
+            )
             raise BusinessRuleError(detail="Diagnosis must include assessment findings")
 
+        logger.info("Diagnosis content validated successfully")
         return diagnosis
 
     @staticmethod
@@ -151,10 +199,14 @@ class MedicalRecordService:
         prescription_lower = prescription.lower()
         for drug1, drug2 in dangerous_combinations:
             if drug1 in prescription_lower and drug2 in prescription_lower:
+                logger.warning(
+                    f"Dangerous drug combination detected: {drug1} and {drug2}"
+                )
                 raise BusinessRuleError(
                     detail=f"Dangerous drug combination detected: {drug1} and {drug2}"
                 )
 
+        logger.info("Prescription validated successfully")
         return prescription
 
     @staticmethod
@@ -217,12 +269,18 @@ class MedicalRecordService:
         """Create a new medical record with business logic validation"""
 
         appointment_id = validated_data.pop("appointment_id")
+        logger.info(
+            f"User {user.email} initiating medical record creation for appointment {appointment_id}"
+        )
 
         try:
             appointment = Appointment.objects.select_related(
                 "patient", "specialist"
             ).get(id=appointment_id)
         except Appointment.DoesNotExist:
+            logger.error(
+                f"Appointment {appointment_id} not found for medical record creation"
+            )
             raise NotFoundError(detail="Appointment not found")
 
         # Validate creation permissions
@@ -261,8 +319,11 @@ class MedicalRecordService:
             confidentiality_level=confidentiality_level,
         )
 
-        # Log creation (placeholder for audit service)
-        # MedicalRecordAuditService.log_creation(medical_record, user)
+        logger.info(
+            f"Medical record {medical_record.id} created successfully by {user.email} "
+            f"for patient {appointment.patient.email}, appointment {appointment.id}, "
+            f"confidentiality: {confidentiality_level}"
+        )
 
         return medical_record
 
@@ -270,9 +331,15 @@ class MedicalRecordService:
     @transaction.atomic
     def update_medical_record(cls, user, medical_record, **validated_data):
         """Update medical record with business logic validation"""
+        logger.info(
+            f"User {user.email} attempting to update medical record {medical_record.id}"
+        )
 
         # Check permissions
         if not cls.can_edit_record(user, medical_record):
+            logger.warning(
+                f"User {user.email} denied permission to edit medical record {medical_record.id}"
+            )
             raise AuthorizationError(
                 detail="You do not have permission to edit this record"
             )
@@ -283,31 +350,39 @@ class MedicalRecordService:
         follow_up_date = validated_data.get("follow_up_date")
 
         # Apply business logic validation if fields are being updated
+        updated_fields = []
         if diagnosis:
             diagnosis = cls.validate_diagnosis_content(diagnosis)
             medical_record.diagnosis = diagnosis
+            updated_fields.append("diagnosis")
 
         if prescription is not None:  # Could be empty string
             prescription = cls.validate_prescription_content(prescription)
             medical_record.prescription = prescription
+            updated_fields.append("prescription")
 
         if follow_up_date is not None:  # Could be None
             follow_up_date = cls.validate_follow_up_date(
                 follow_up_date, medical_record.appointment.appointment_date
             )
             medical_record.follow_up_date = follow_up_date
+            updated_fields.append("follow_up_date")
 
         # Update other fields
         if "notes" in validated_data:
             medical_record.notes = validated_data["notes"]
+            updated_fields.append("notes")
 
         if "recommendations" in validated_data:
             medical_record.recommendations = validated_data["recommendations"]
+            updated_fields.append("recommendations")
 
         medical_record.save()
 
-        # Log update (placeholder for audit service)
-        # MedicalRecordAuditService.log_update(medical_record, user)
+        logger.info(
+            f"Medical record {medical_record.id} updated by {user.email}. "
+            f"Updated fields: {', '.join(updated_fields) if updated_fields else 'none'}"
+        )
 
         return medical_record
 
@@ -315,16 +390,27 @@ class MedicalRecordService:
     @transaction.atomic
     def delete_medical_record(cls, user, medical_record):
         """Delete medical record (admin only with audit trail)"""
+        logger.info(
+            f"User {user.email} attempting to delete medical record {medical_record.id}"
+        )
 
         # Check permissions
         if not cls.can_delete_record(user, medical_record):
-            raise AuthorizationError(detail="Only admins can delete medical records")
+            logger.warning(
+                f"User {user.email} denied permission to delete medical record {medical_record.id}"
+            )
+            raise PrivacyError(detail="Only admins can delete medical records")
 
-        # Create audit log before deletion
-        # MedicalRecordAuditService.log_deletion(medical_record, user)
+        # Log deletion details before deleting
+        logger.info(
+            f"Deleting medical record {medical_record.id} by admin {user.email}. "
+            f"Patient: {medical_record.patient.email}, Appointment: {medical_record.appointment.id}, "
+            f"Confidentiality: {medical_record.confidentiality_level}"
+        )
 
         # Actually delete (consider soft delete instead)
         medical_record.delete()
+        logger.info(f"Medical record {medical_record.id} deleted successfully")
 
     @classmethod
     def get_filtered_records(cls, user, filters):
@@ -410,8 +496,15 @@ class MedicalRecordService:
     @classmethod
     def get_statistics(cls, user, period="month"):
         """Get medical record statistics"""
+        logger.info(
+            f"User {user.email} requesting medical record statistics for period: {period}"
+        )
+
         # Permission check
         if user.user_type not in ["admin", "staff", "specialist"]:
+            logger.warning(
+                f"User {user.email} ({user.user_type}) unauthorized to view statistics"
+            )
             raise AuthorizationError(
                 detail="Only admin, staff, or specialists can view statistics"
             )
@@ -496,6 +589,11 @@ class MedicalRecordService:
             )
         else:
             specialist_stats = []
+
+        logger.info(
+            f"Statistics generated for {user.email}: {total_records} records found for period {period} "
+            f"({start_date} to {end_date})"
+        )
 
         return {
             "period": period,

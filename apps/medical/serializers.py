@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from .models import MedicalRecord
 from apps.appointments.models import Appointment
-from apps.core.exceptions.base_exceptions import ValidationError, NotFoundError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 
 User = get_user_model()
 
@@ -79,7 +79,7 @@ class MedicalRecordCreateSerializer(serializers.ModelSerializer):
         try:
             appointment = Appointment.objects.get(id=value)
         except Appointment.DoesNotExist:
-            raise NotFoundError(detail="Appointment not found")
+            raise ValidationError(message="Appointment does not exist")
 
         return value
 
@@ -87,7 +87,7 @@ class MedicalRecordCreateSerializer(serializers.ModelSerializer):
         """Basic format validation"""
         if not value or len(value.strip()) < 10:
             raise ValidationError(
-                detail="Diagnosis must be at least 10 characters long"
+                message="Diagnosis must be at least 10 characters long"
             )
         return value.strip()
 
@@ -95,7 +95,7 @@ class MedicalRecordCreateSerializer(serializers.ModelSerializer):
         """Basic prescription validation"""
         if value and len(value.strip()) < 5:
             raise ValidationError(
-                detail="Prescription must be at least 5 characters long if provided"
+                message="Prescription must be at least 5 characters long if provided"
             )
         return value.strip() if value else ""
 
@@ -103,14 +103,14 @@ class MedicalRecordCreateSerializer(serializers.ModelSerializer):
         """Basic notes validation"""
         if value and len(value.strip()) < 5:
             raise ValidationError(
-                detail="Notes must be at least 5 characters long if provided"
+                message="Notes must be at least 5 characters long if provided"
             )
         return value.strip() if value else ""
 
     def validate_follow_up_date(self, value):
         """Basic follow-up date validation"""
         if value and value < timezone.now().date():
-            raise ValidationError(detail="Follow-up date cannot be in the past")
+            raise ValidationError(message="Follow-up date cannot be in the past")
         return value
 
 
@@ -130,13 +130,13 @@ class MedicalRecordUpdateSerializer(serializers.ModelSerializer):
     def validate_diagnosis(self, value):
         if not value or len(value.strip()) < 10:
             raise ValidationError(
-                detail="Diagnosis must be at least 10 characters long"
+                message="Diagnosis must be at least 10 characters long"
             )
         return value.strip()
 
     def validate_follow_up_date(self, value):
         if value and value < timezone.now().date():
-            raise ValidationError(detail="Follow-up date cannot be in the past")
+            raise ValidationError(message="Follow-up date cannot be in the past")
         return value
 
 
@@ -174,7 +174,7 @@ class MedicalRecordExportSerializer(serializers.Serializer):
 
     def validate(self, data):
         if data["start_date"] > data["end_date"]:
-            raise ValidationError(detail="Start date must be before end date")
+            raise ValidationError(message="Start date must be before end date")
         return data
 
 
@@ -192,5 +192,5 @@ class MedicalRecordAuditSerializer(serializers.Serializer):
     def validate(self, data):
         if data.get("start_date") and data.get("end_date"):
             if data["start_date"] > data["end_date"]:
-                raise ValidationError(detail="Start date must be before end date")
+                raise ValidationError(message="Start date must be before end date")
         return data
