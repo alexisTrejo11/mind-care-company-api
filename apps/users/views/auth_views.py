@@ -3,7 +3,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from core.exceptions.base_exceptions import ValidationError
-from core.decorators.error_handler import api_error_handler, rate_limit
+from core.decorators.error_handler import api_error_handler
+from core.decorators.rate_limit import rate_limit
 from core.responses.api_response import APIResponse
 
 from ..services.user_service import UserService
@@ -23,7 +24,7 @@ class UserLoginView(APIView):
     serializer_class = UserLoginSerializer
 
     @api_error_handler
-    @rate_limit(key="email", rate="5/15min", scope="login")
+    @rate_limit(key_type="email", rate="10/1min", scope="login")
     def post(self, request):
         """Autenticar usuario"""
         serializer = self.serializer_class(data=request.data)

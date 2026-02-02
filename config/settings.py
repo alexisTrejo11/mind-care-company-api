@@ -25,7 +25,7 @@ SECRET_KEY = "django-insecure-$#@71(!17jws&nril%%kslbc(_f25@+1q_=%c4fie$e8wm73=v
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 
 # Application definition
@@ -136,6 +136,19 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.FormParser",
         "rest_framework.parsers.MultiPartParser",
     ],
+}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
+        },
+        "KEY_PREFIX": "mind_care_hub",
+        "TIMEOUT": 60 * 15,  # 15 minutes
+    }
 }
 
 LOGGING = {

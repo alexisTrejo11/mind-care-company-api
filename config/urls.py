@@ -19,7 +19,7 @@ from apps.specialists import urls as specialists_urls
 from apps.appointments import urls as appointments_urls
 from django.contrib import admin
 from django.urls import path
-
+from apps.users.urls import urlpatterns as users_urls
 
 urlpatterns = [
     path("api/v2/admin/", admin.site.urls),
@@ -27,3 +27,4 @@ urlpatterns = [
 
 urlpatterns += specialists_urls.urlpatterns
 urlpatterns += appointments_urls.urlpatterns
+urlpatterns += users_urls

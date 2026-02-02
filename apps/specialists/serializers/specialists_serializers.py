@@ -1,9 +1,10 @@
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.contrib.auth import get_user_model
 from django.core.validators import validate_email
 from django.db import transaction
 
-from core.exceptions.base_exceptions import ValidationError, NotFoundError
+from core.exceptions.base_exceptions import NotFoundError
 from ..models import Specialist, SpecialistService, Service
 from .service_serializers import ServiceSerializer
 from .availability_serializers import AvailabilitySerializer
@@ -127,7 +128,7 @@ class SpecialistCreateSerializer(serializers.ModelSerializer):
         try:
             user = User.objects.get(id=user_id)
             if hasattr(user, "specialist_profile"):
-                raise ValidationError(detail="User already has a specialist profile")
+                raise DRFValidationError(detail="User already has a specialist profile")
             data["user"] = user
         except User.DoesNotExist:
             raise NotFoundError(detail="User not found")
@@ -135,17 +136,17 @@ class SpecialistCreateSerializer(serializers.ModelSerializer):
         # Validate license number uniqueness
         license_number = data.get("license_number")
         if Specialist.objects.filter(license_number=license_number).exists():
-            raise ValidationError(detail="License number already registered")
+            raise DRFValidationError(detail="License number already registered")
 
         # Validate years_experience
         years_experience = data.get("years_experience", 0)
         if years_experience < 0:
-            raise ValidationError(detail="Years experience cannot be negative")
+            raise DRFValidationError(detail="Years experience cannot be negative")
 
         # Validate consultation_fee
         consultation_fee = data.get("consultation_fee", 0)
         if consultation_fee < 0:
-            raise ValidationError(detail="Consultation fee cannot be negative")
+            raise DRFValidationError(detail="Consultation fee cannot be negative")
 
         # Update user info if provided
         if data.get("email"):
@@ -172,7 +173,7 @@ class SpecialistCreateSerializer(serializers.ModelSerializer):
                 user_data[field] = validated_data.pop(field)
 
         # Update user if needed
-        user = validated_data["user"]
+        user = validated_data.pop("user")
         if user_data:
             for key, value in user_data.items():
                 setattr(user, key, value)
@@ -209,17 +210,17 @@ class SpecialistUpdateSerializer(serializers.ModelSerializer):
             .exclude(id=instance.id)
             .exists()
         ):
-            raise ValidationError(detail="License number already registered")
+            raise DRFValidationError(detail="License number already registered")
         return value
 
     def validate(self, data):
         # Validate years_experience
         if "years_experience" in data and data["years_experience"] < 0:
-            raise ValidationError(detail="Years experience cannot be negative")
+            raise DRFValidationError(detail="Years experience cannot be negative")
 
         # Validate consultation_fee
         if "consultation_fee" in data and data["consultation_fee"] < 0:
-            raise ValidationError(detail="Consultation fee cannot be negative")
+            raise DRFValidationError(detail="Consultation fee cannot be negative")
 
         return data
 
@@ -308,12 +309,12 @@ class SpecialistServiceCreateSerializer(serializers.ModelSerializer):
         if SpecialistService.objects.filter(
             specialist_id=specialist_id, service_id=service_id
         ).exists():
-            raise ValidationError(detail="Specialist already offers this service")
+            raise DRFValidationError(detail="Specialist already offers this service")
 
         # Verify price_override is reasonable
         price_override = data.get("price_override")
         if price_override and price_override > service.base_price * 3:
-            raise ValidationError(
+            raise DRFValidationError(
                 detail="Price override cannot exceed 3 times the base price"
             )
 

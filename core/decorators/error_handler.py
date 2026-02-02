@@ -133,28 +133,3 @@ def require_http_methods(methods: list):
         return wrapper
 
     return decorator
-
-
-def rate_limit(key: str, rate: str, scope: str = "default"):
-    """
-    Decorator to apply rate limiting to API views.
-    This is a placeholder implementation; actual rate limiting logic
-    should be integrated with a library like django-ratelimit or similar.
-    """
-
-    def decorator(view_func: Callable) -> Callable:
-        @functools.wraps(view_func)
-        def wrapper(self, request, *args, **kwargs):
-            # Placeholder for rate limiting logic
-            # In a real implementation, check if the request exceeds the rate limit
-            # If exceeded, raise RateLimitError
-
-            # Example:
-            # if is_rate_limited(key, rate, scope):
-            #     raise RateLimitError(detail="Rate limit exceeded")
-
-            return view_func(self, request, *args, **kwargs)
-
-        return wrapper
-
-    return decorator

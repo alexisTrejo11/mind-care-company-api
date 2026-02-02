@@ -15,6 +15,12 @@ class MindCareBaseException(APIException):
         self.metadata = metadata or {}
 
 
+class ToManyRequestsError(MindCareBaseException):
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    default_detail = "Too many requests"
+    default_code = "too_many_requests"
+
+
 # Authentication & Authorization
 class AuthenticationError(MindCareBaseException):
     status_code = status.HTTP_401_UNAUTHORIZED

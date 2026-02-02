@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
-from core.decorators.error_handler import api_error_handler, rate_limit
+from core.decorators.error_handler import api_error_handler
+from core.decorators.rate_limit import rate_limit
 from core.responses.api_response import APIResponse
 from ..services.user_service import UserService
 from ..serializers import UserRegistrationSerializer
@@ -18,7 +19,7 @@ class UserRegistrationView(APIView):
     serializer_class = UserRegistrationSerializer
 
     @api_error_handler
-    @rate_limit(key="ip", rate="5/hour", scope="registration")
+    @rate_limit(key_type="ip", rate="5/hour", scope="registration")
     def post(self, request):
         """Registrar nuevo usuario"""
         serializer = self.serializer_class(data=request.data)

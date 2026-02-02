@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from core.decorators.error_handler import api_error_handler, rate_limit
+from core.decorators.error_handler import api_error_handler
+from core.decorators.rate_limit import rate_limit
 from core.responses.api_response import APIResponse
 from core.shared import mask_email
 from ..services.user_service import UserService
@@ -25,7 +26,7 @@ class PasswordResetRequestView(APIView):
     serializer_class = PasswordResetRequestSerializer
 
     @api_error_handler
-    @rate_limit(key="email", rate="3/hour", scope="password_reset")
+    @rate_limit(key_type="email", rate="3/hour", scope="password_reset")
     def post(self, request):
         """Solicitar reseteo de contraseña"""
         serializer = self.serializer_class(data=request.data)
