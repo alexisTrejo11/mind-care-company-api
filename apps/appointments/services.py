@@ -3,12 +3,14 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count, Q, Avg, Sum
 from .models import Appointment
-from specialists.models import Specialist
+from apps.specialists.models import Specialist
 from core.exceptions.base_exceptions import (
     BusinessRuleError,
     NotFoundError,
     ConflictError,
+    ValidationError,
 )
+from datetime import datetime
 
 
 class AppointmentService:
@@ -25,17 +27,39 @@ class AppointmentService:
     MAX_ADVANCE_BOOKING_DAYS = 90
 
     @staticmethod
-    def is_within_clinic_hours(appointment_time):
+    def _normalize_datetime(dt) -> datetime:
+        """
+        Helper to ensure we are working with an aware datetime object.
+        If it's naive, it attaches the project's timezone.
+        """
+        if not isinstance(dt, datetime):
+            raise ValidationError(
+                detail=f"Expected datetime object, got {type(dt).__name__}"
+            )
+
+        if timezone.is_naive(dt):
+            return timezone.make_aware(dt)
+        return dt
+
+    @staticmethod
+    def is_within_clinic_hours(appointment_time) -> bool:
         """Check if appointment time is within clinic operating hours"""
+        appointment_time = AppointmentService._normalize_datetime(appointment_time)
+
         hour = appointment_time.hour
         return (
-            hour >= AppointmentService.CLINIC_OPEN_HOUR
-            and hour < AppointmentService.CLINIC_CLOSE_HOUR
+            AppointmentService.CLINIC_OPEN_HOUR
+            <= hour
+            < AppointmentService.CLINIC_CLOSE_HOUR
         )
 
     @staticmethod
     def validate_booking_time(appointment_datetime):
         """Validate if booking time meets requirements"""
+        # Normalize and validate datetime
+        appointment_datetime = AppointmentService._normalize_datetime(
+            appointment_datetime
+        )
         now = timezone.now()
 
         # Check if in the future
@@ -83,6 +107,10 @@ class AppointmentService:
         specialist, start_time, end_time, exclude_appointment_id=None
     ):
         """Check if specialist is available for the given time slot"""
+        # Normalize and validate datetime parameters
+        start_time = AppointmentService._normalize_datetime(start_time)
+        end_time = AppointmentService._normalize_datetime(end_time)
+
         # Check if specialist is active
         if not specialist.is_active:
             raise BusinessRuleError(detail="Specialist is not active")
@@ -118,6 +146,10 @@ class AppointmentService:
         patient, start_time, end_time, exclude_appointment_id=None
     ):
         """Check if patient doesn't have overlapping appointments"""
+        # Normalize and validate datetime parameters
+        start_time = AppointmentService._normalize_datetime(start_time)
+        end_time = AppointmentService._normalize_datetime(end_time)
+
         # Build query for overlapping appointments
         overlap_query = Q(
             patient=patient,
@@ -147,6 +179,10 @@ class AppointmentService:
     @staticmethod
     def validate_appointment_time_slot(start_time, end_time):
         """Validate appointment time slot meets business rules"""
+        # Normalize and validate datetime parameters
+        start_time = AppointmentService._normalize_datetime(start_time)
+        end_time = AppointmentService._normalize_datetime(end_time)
+
         duration = (end_time - start_time).total_seconds() / 60
 
         # Check minimum appointment duration
@@ -265,6 +301,10 @@ class AppointmentService:
         new_end_time = validated_data["new_end_time"]
         new_appointment_date = validated_data["new_appointment_date"]
         new_duration_minutes = validated_data["new_duration_minutes"]
+
+        # Normalize and validate new datetime parameters
+        new_start_time = cls._normalize_datetime(new_start_time)
+        new_end_time = cls._normalize_datetime(new_end_time)
 
         # Validate new booking time
         cls.validate_booking_time(new_start_time)

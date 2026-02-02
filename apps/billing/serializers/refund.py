@@ -1,15 +1,7 @@
-"""
-DRF Serializers for billing and payments
-"""
-
 from rest_framework import serializers
-from django.utils import timezone
 from django.contrib.auth import get_user_model
-from datetime import datetime, timedelta
+from ..models import Refund
 
-from .models import Bill, BillItem, Payment, Refund, InsuranceClaim, PaymentMethod
-from apps.appointments.models import Appointment
-from core.responses.api_response import APIResponse
 
 User = get_user_model()
 

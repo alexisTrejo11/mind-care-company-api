@@ -16,6 +16,7 @@ Including another URLconf
 """
 
 from apps.specialists import urls as specialists_urls
+from apps.appointments import urls as appointments_urls
 from django.contrib import admin
 from django.urls import path
 
@@ -25,3 +26,4 @@ urlpatterns = [
 ]
 
 urlpatterns += specialists_urls.urlpatterns
+urlpatterns += appointments_urls.urlpatterns

@@ -32,6 +32,8 @@ class Specialist(models.Model):
         max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
     )
     is_accepting_new_patients = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    max_daily_appointments = models.IntegerField(default=20, validators=[MinValueValidator(1)])
     bio = models.TextField(blank=True)
     rating = models.DecimalField(
         max_digits=3,
@@ -39,6 +41,12 @@ class Specialist(models.Model):
         default=decimal.Decimal("0.00"),
         validators=[MinValueValidator(0), MaxValueValidator(5)],
     )
+
+    def can_handle_appointment_type(self, appointment_type):
+        """Check if specialist can handle this appointment type"""
+        # For now, all specialists can handle all appointment types
+        # This can be extended with more complex logic
+        return True
 
 
 class Service(models.Model):

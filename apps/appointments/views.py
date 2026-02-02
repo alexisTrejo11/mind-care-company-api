@@ -6,6 +6,7 @@ from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
+from django.http import Http404
 
 
 from core.decorators.error_handler import api_error_handler
@@ -38,7 +39,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         "appointment_type": ["exact"],
         "appointment_date": ["gte", "lte", "exact"],
         "specialist__id": ["exact"],
-        "patient__user_id": ["exact"],
+        "patient__id": ["exact"],
     }
 
     search_fields = [
@@ -62,9 +63,9 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         if self.action in ["stats", "today_appointments"]:
             return [IsAuthenticated(), IsSpecialistOrStaff()]
         elif self.action == "create":
-            return [IsAuthenticated(), IsPatient(), IsSpecialistOrStaff()]
+            return [IsAuthenticated()]  # Any authenticated user can create
         elif self.action in ["update", "partial_update", "cancel", "reschedule"]:
-            return [IsSpecialistOrStaff()]
+            return [IsAuthenticated(), IsSpecialistOrStaff()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -108,7 +109,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     @api_error_handler
     def retrieve(self, request, *args, **kwargs):
         """Get appointment details"""
-        instance = self.get_object()
+        try:
+            instance = self.get_object()
+        except Http404:
+            return APIResponse.error(
+                message="Appointment not found",
+                code="not_found",
+                status_code=404,
+            )
         serializer = self.get_serializer(instance)
         return APIResponse.success(
             message="Appointment details retrieved", data=serializer.data
@@ -136,10 +144,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     def cancel(self, request, pk=None):
         """Cancel an appointment"""
         appointment = self.get_object()
-
-        # Ownership check
-        if request.user.user_type == "patient" and appointment.patient != request.user:
-            raise PermissionDenied("Cannot cancel another patient's appointment")
+        # Queryset filtering already ensures patients can only access their own appointments
 
         appointment = AppointmentService.cancel_appointment(
             appointment=appointment, cancelled_by=request.user
@@ -163,7 +168,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         # Use service to reschedule
         appointment = AppointmentService.reschedule_appointment(
-            appointment_id=appointment.id, **serializer.validated_data
+            appointment=appointment, **serializer.validated_data
         )
 
         return APIResponse.success(

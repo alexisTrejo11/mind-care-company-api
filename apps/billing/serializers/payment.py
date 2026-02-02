@@ -1,0 +1,285 @@
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+
+from ..models import Bill, Payment, InsuranceClaim, PaymentMethod
+
+User = get_user_model()
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    """Serializer for payments"""
+
+    bill_number = serializers.CharField(source="bill.bill_number", read_only=True)
+    patient_name = serializers.CharField(source="patient.get_full_name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    payment_method_display = serializers.CharField(
+        source="get_payment_method_display", read_only=True
+    )
+
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "payment_number",
+            "bill",
+            "bill_number",
+            "patient",
+            "patient_name",
+            "amount",
+            "currency",
+            "payment_method",
+            "payment_method_display",
+            "status",
+            "status_display",
+            "card_last4",
+            "card_brand",
+            "stripe_payment_intent_id",
+            "stripe_charge_id",
+            "is_insurance_payment",
+            "insurance_claim_id",
+            "notes",
+            "error_message",
+            "payment_date",
+            "processed_at",
+            "refunded_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "payment_number",
+            "created_at",
+            "updated_at",
+            "stripe_payment_intent_id",
+            "stripe_charge_id",
+            "status_display",
+            "payment_method_display",
+            "payment_date",
+            "processed_at",
+            "refunded_at",
+            "error_message",
+        ]
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0")
+        return value
+
+    def validate(self, attrs):
+        """Validate payment"""
+        bill = self.instance.bill if self.instance else attrs.get("bill")
+
+        if bill and "amount" in attrs:
+            # Check if payment exceeds balance due
+            if attrs["amount"] > bill.balance_due:
+                raise serializers.ValidationError(
+                    {
+                        "amount": f"Payment amount cannot exceed balance due (${bill.balance_due})"
+                    }
+                )
+
+        return attrs
+
+
+class PaymentCreateSerializer(PaymentSerializer):
+    """Serializer for creating payments"""
+
+    bill_id = serializers.IntegerField(write_only=True, required=True)
+
+    class Meta(PaymentSerializer.Meta):
+        fields = PaymentSerializer.Meta.fields + ["bill_id"]
+        read_only_fields = [
+            f
+            for f in PaymentSerializer.Meta.read_only_fields
+            if f not in ["bill", "bill_number"]
+        ]
+
+    def validate_bill_id(self, value):
+        """Validate bill"""
+        try:
+            bill = Bill.objects.get(id=value)
+
+            # Check if bill can be paid
+            if bill.payment_status in ["paid", "cancelled", "refunded"]:
+                raise serializers.ValidationError(
+                    f"Cannot make payment for bill with status: {bill.payment_status}"
+                )
+
+            return value
+
+        except Bill.DoesNotExist:
+            raise serializers.ValidationError("Bill not found")
+
+    def create(self, validated_data):
+        """Create payment"""
+        from .services import BillingService
+
+        bill_id = validated_data.pop("bill_id")
+        request = self.context.get("request")
+
+        # Create payment using service
+        payment = BillingService.create_payment(
+            bill_id=bill_id,
+            patient=request.user if request else None,
+            created_by=request.user if request else None,
+            **validated_data,
+        )
+
+        return payment
+
+
+class PaymentMethodSerializer(serializers.ModelSerializer):
+    """Serializer for payment methods"""
+
+    patient_name = serializers.CharField(source="patient.get_full_name", read_only=True)
+    method_type_display = serializers.CharField(
+        source="get_method_type_display", read_only=True
+    )
+
+    # Masked details for security
+    masked_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentMethod
+        fields = [
+            "id",
+            "patient",
+            "patient_name",
+            "method_type",
+            "method_type_display",
+            "is_default",
+            "is_active",
+            "card_brand",
+            "card_last4",
+            "card_exp_month",
+            "card_exp_year",
+            "bank_name",
+            "account_last4",
+            "account_type",
+            "masked_details",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "method_type_display",
+            "masked_details",
+            "card_brand",
+            "card_last4",
+            "card_exp_month",
+            "card_exp_year",
+            "bank_name",
+            "account_last4",
+            "account_type",
+        ]
+
+    def get_masked_details(self, obj) -> str:
+        """Get masked payment method details"""
+        if obj.card_brand:
+            return f"{obj.card_brand} ****{obj.card_last4}"
+        elif obj.bank_name:
+            return f"{obj.bank_name} ****{obj.account_last4}"
+        return "Payment Method"
+
+
+class CreatePaymentIntentSerializer(serializers.Serializer):
+    """Serializer for creating Stripe payment intent"""
+
+    bill_id = serializers.IntegerField(required=True)
+    amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, min_value=0.50
+    )
+    payment_method_id = serializers.CharField(
+        required=False, help_text="Stripe Payment Method ID for saved cards"
+    )
+    save_payment_method = serializers.BooleanField(default=False)
+
+    def validate(self, attrs):
+        """Validate payment intent creation"""
+        try:
+            bill = Bill.objects.get(id=attrs["bill_id"])
+
+            # Validate bill can be paid
+            if bill.payment_status in ["paid", "cancelled", "refunded"]:
+                raise serializers.ValidationError(
+                    {
+                        "bill_id": f"Bill with status {bill.payment_status} cannot be paid"
+                    }
+                )
+
+            # Set amount to balance due if not specified
+            if "amount" not in attrs or not attrs["amount"]:
+                attrs["amount"] = bill.balance_due
+
+            # Validate amount
+            if attrs["amount"] > bill.balance_due:
+                raise serializers.ValidationError(
+                    {
+                        "amount": f"Amount cannot exceed balance due (${bill.balance_due})"
+                    }
+                )
+
+            if attrs["amount"] < 0.50:  # Stripe minimum
+                raise serializers.ValidationError(
+                    {"amount": "Minimum payment amount is $0.50"}
+                )
+
+            attrs["bill"] = bill
+            return attrs
+
+        except Bill.DoesNotExist:
+            raise serializers.ValidationError({"bill_id": "Bill not found"})
+
+
+class InsuranceClaimSerializer(serializers.ModelSerializer):
+    """Serializer for insurance claims"""
+
+    bill_number = serializers.CharField(source="bill.bill_number", read_only=True)
+    patient_name = serializers.CharField(source="patient.get_full_name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = InsuranceClaim
+        fields = [
+            "id",
+            "claim_number",
+            "bill",
+            "bill_number",
+            "patient",
+            "patient_name",
+            "insurance_company",
+            "policy_number",
+            "group_number",
+            "subscriber_name",
+            "subscriber_relationship",
+            "diagnosis_codes",
+            "procedure_codes",
+            "total_claimed_amount",
+            "insurance_responsibility",
+            "patient_responsibility",
+            "denied_amount",
+            "status",
+            "status_display",
+            "date_of_service",
+            "date_submitted",
+            "date_acknowledged",
+            "date_processed",
+            "date_paid",
+            "edi_file_name",
+            "edi_reference_number",
+            "payer_claim_number",
+            "notes",
+            "denial_reason",
+            "appeal_notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "claim_number",
+            "created_at",
+            "updated_at",
+            "status_display",
+        ]

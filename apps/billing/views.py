@@ -6,14 +6,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
 from core.decorators.error_handler import api_error_handler
-from core.decorators.permissions import (
-    require_permissions,
-    user_is_patient,
-    user_is_specialist,
-    user_is_admin_or_staff,
-    user_is_admin,
-    owns_appointment,
-)
 from core.responses.api_response import APIResponse
 
 from .models import Bill, Payment, Refund, InsuranceClaim, PaymentMethod

@@ -2,11 +2,11 @@ from rest_framework import serializers
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from .models import Appointment
-from specialists.models import Specialist
+from apps.specialists.models import Specialist
 from core.exceptions.base_exceptions import (
-    ValidationError,
     NotFoundError,
 )
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
@@ -51,7 +51,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         return None
 
     def get_specialist_specialty(self, obj):
-        return obj.specialist.specialty if obj.specialist else None
+        return obj.specialist.specialization if obj.specialist else None
 
 
 class AppointmentCreateSerializer(serializers.ModelSerializer):
@@ -87,7 +87,7 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
                 data["patient"] = user
             else:
                 raise ValidationError(
-                    detail="Patient ID is required or user must be a patient"
+                    message="Patient ID is required or user must be a patient"
                 )
         else:
             # Validate patient exists and is a patient type
@@ -101,7 +101,7 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
             # Check if user has permission to create appointment for this patient
             if user and user.user_type == "patient" and user != patient:
                 raise ValidationError(
-                    detail="Patients can only create appointments for themselves"
+                    message="Patients can only create appointments for themselves"
                 )
 
         # Validate specialist exists
@@ -119,23 +119,23 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
         duration_minutes = data.get("duration_minutes")
 
         if start_time >= end_time:
-            raise ValidationError(detail="Start time must be before end time")
+            raise ValidationError(message="Start time must be before end time")
 
         if appointment_date.date() != start_time.date():
-            raise ValidationError(detail="Appointment date must match start time date")
+            raise ValidationError(message="Appointment date must match start time date")
 
         # Validate duration matches time difference
         expected_duration = (end_time - start_time).total_seconds() / 60
         if abs(duration_minutes - expected_duration) > 1:  # Allow 1 minute tolerance
             raise ValidationError(
-                detail=f"Duration {duration_minutes} minutes doesn't match time slot"
+                message=f"Duration {duration_minutes} minutes doesn't match time slot"
             )
 
         # Validate duration is positive and reasonable
         if duration_minutes < 5:
-            raise ValidationError(detail="Minimum appointment duration is 5 minutes")
+            raise ValidationError(message="Minimum appointment duration is 5 minutes")
         if duration_minutes > 480:  # 8 hours max
-            raise ValidationError(detail="Maximum appointment duration is 480 minutes")
+            raise ValidationError(message="Maximum appointment duration is 480 minutes")
 
         return data
 
@@ -163,7 +163,7 @@ class AppointmentUpdateSerializer(serializers.ModelSerializer):
         # Patients can only cancel their own appointments
         if request.user.user_type == "patient":
             if value != "cancelled" and appointment.status != "scheduled":
-                raise ValidationError(detail="Patients can only cancel appointments")
+                raise ValidationError(message="Patients can only cancel appointments")
 
         return value
 
@@ -182,7 +182,7 @@ class AppointmentRescheduleSerializer(serializers.Serializer):
         appointment = self.context.get("appointment")
 
         if not appointment:
-            raise ValidationError(detail="Appointment context required")
+            raise ValidationError(message="Appointment context required")
 
         new_start_time = data["new_start_time"]
         new_end_time = data["new_end_time"]
@@ -191,20 +191,20 @@ class AppointmentRescheduleSerializer(serializers.Serializer):
 
         # Validate new date/time logic
         if new_start_time >= new_end_time:
-            raise ValidationError(detail="Start time must be before end time")
+            raise ValidationError(message="Start time must be before end time")
 
         if new_appointment_date.date() != new_start_time.date():
-            raise ValidationError(detail="Appointment date must match start time date")
+            raise ValidationError(message="Appointment date must match start time date")
 
         # Validate new time is in the future
         if new_start_time <= timezone.now():
-            raise ValidationError(detail="Cannot reschedule to past time")
+            raise ValidationError(message="Cannot reschedule to past time")
 
         # Validate new duration matches time difference
         expected_duration = (new_end_time - new_start_time).total_seconds() / 60
         if abs(new_duration_minutes - expected_duration) > 1:
             raise ValidationError(
-                detail=f"Duration {new_duration_minutes} minutes doesn't match time slot"
+                message=f"Duration {new_duration_minutes} minutes doesn't match time slot"
             )
 
         # Verify user has permission to reschedule
@@ -214,7 +214,7 @@ class AppointmentRescheduleSerializer(serializers.Serializer):
                 and appointment.patient != request.user
             ):
                 raise ValidationError(
-                    detail="Cannot reschedule another patient's appointment"
+                    message="Cannot reschedule another patient's appointment"
                 )
 
         return data
@@ -236,9 +236,9 @@ class AppointmentStatsSerializer(serializers.Serializer):
         if period == "custom":
             if not data.get("start_date") or not data.get("end_date"):
                 raise ValidationError(
-                    detail="start_date and end_date are required for custom period"
+                    message="start_date and end_date are required for custom period"
                 )
             if data["start_date"] > data["end_date"]:
-                raise ValidationError(detail="start_date must be before end_date")
+                raise ValidationError(message="start_date must be before end_date")
 
         return data
