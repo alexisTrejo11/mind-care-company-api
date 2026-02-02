@@ -2,7 +2,7 @@ from django.db import DatabaseError
 from django.utils import timezone
 import logging
 from typing import Optional
-from core.exceptions.base_exceptions import NotificationError
+from apps.core.exceptions.base_exceptions import NotificationError
 from ..models import Notification
 
 logger = logging.getLogger(__name__)

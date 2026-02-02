@@ -4,7 +4,7 @@ Handles token generation, validation, and email utilities
 """
 
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.utils import timezone
 from django.core.cache import cache
 from django.conf import settings
@@ -167,3 +167,15 @@ def clear_rate_limit(identifier, action):
     """
     key = rate_limit_key(identifier, action)
     cache.delete(key)
+
+
+def assert_datetime_with_timezone(dt, field_name="datetime"):
+    """
+    Assert that a datetime object is timezone-aware
+    Raises ValueError if not
+    """
+    if not dt or not isinstance(dt, datetime):
+        raise ValueError(f"Provided value for {field_name} is not a datetime object")
+
+    if timezone.is_naive(dt):
+        raise ValueError(f"{field_name} must be timezone-aware")

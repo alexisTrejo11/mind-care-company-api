@@ -1,28 +1,29 @@
-from rest_framework import viewsets
+from django.http import Http404
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import filters
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
 
-from core.decorators.error_handler import api_error_handler
-from core.responses.api_response import APIResponse
-from core.exceptions.base_exceptions import ValidationError
-
-from ..models import Specialist, SpecialistService
+from apps.core.decorators.error_handler import api_error_handler
+from apps.core.exceptions.base_exceptions import (
+    NotFoundError,
+    PrivacyError,
+    ValidationError,
+)
+from apps.core.responses.api_response import APIResponse
+from ..models import Specialist
 from ..serializers import (
     SpecialistSerializer,
     SpecialistDetailSerializer,
     SpecialistCreateSerializer,
     SpecialistUpdateSerializer,
     SpecialistSearchSerializer,
-    SpecialistServiceSerializer,
-    SpecialistServiceCreateSerializer,
 )
-
-# Placeholder for service - will implement later
-# from .services import SpecialistService
+from ..services import SpecialistServiceLayer
+from apps.core.permissions import IsAdminOrStaff, IsSpecialistOrStaff
 
 
 class SpecialistViewSet(viewsets.ModelViewSet):
@@ -30,7 +31,6 @@ class SpecialistViewSet(viewsets.ModelViewSet):
     Unified ViewSet to handle all specialist operations
     """
 
-    permission_classes = [AllowAny]  # List/retrieve open to all
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -61,14 +61,42 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         """
         Instantiates and returns the list of permissions that this view requires.
         """
-        if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [IsAuthenticated()]
+        if self.action in [
+            "create",
+            "destroy",
+            "activate_specialist",
+            "deactivate_specialist",
+        ]:
+            return [IsAdminOrStaff()]
+        elif self.action in [
+            "update",
+            "partial_update",
+            "activate_specialist",
+            "deactivate_specialist",
+        ]:
+            return [IsSpecialistOrStaff()]
+        elif self.action in [
+            "list",
+            "retrieve",
+            "specialist_services",
+            "available_slots",
+            "by_specialization",
+            "specialist_availability",
+        ]:
+            return [AllowAny()]
+
         return super().get_permissions()
 
     def get_queryset(self):
-        queryset = Specialist.objects.select_related("user").filter(
-            user__is_active=True
-        )
+        # Allow inactive specialists for activate action
+        if self.action == "activate_specialist":
+            queryset = Specialist.objects.select_related("user").filter(
+                user__is_active=True
+            )
+        else:
+            queryset = Specialist.objects.select_related("user").filter(
+                user__is_active=True, is_active=True  # Only show active specialists
+            )
 
         # Apply search filters from query params
         params = self.request.query_params
@@ -120,31 +148,34 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         search_serializer = SpecialistSearchSerializer(data=request.query_params)
         search_serializer.is_valid(raise_exception=True)
 
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
+        # Use service for business logic
+        specialists, pagination = SpecialistServiceLayer.search_specialists(
+            filters=search_serializer.validated_data,
+            page=search_serializer.validated_data.get("page", 1),
+            page_size=search_serializer.validated_data.get("page_size", 20),
+        )
 
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(specialists, many=True)
 
-        serializer = self.get_serializer(queryset, many=True)
         return APIResponse.success(
-            message="Specialists retrieved successfully", data=serializer.data
+            message="Specialists retrieved successfully",
+            data=serializer.data,
+            pagination=pagination,
         )
 
     @api_error_handler
     def retrieve(self, request, *args, **kwargs):
         """Get specialist details"""
-        instance = self.get_object()
+        try:
+            instance = self.get_object()
+        except Http404:
+            raise NotFoundError("Specialist not found")
 
-        # Get statistics (placeholder - will move to service)
-        stats = {
-            "total_appointments": 0,  # Placeholder
-            "avg_rating": float(instance.rating),
-            "patient_count": 0,  # Placeholder
-        }
+        detail_result = SpecialistServiceLayer.get_specialist_detail(instance.id)
+        specialist_data = detail_result["specialist"]
+        stats = detail_result["stats"]
 
-        serializer = self.get_serializer(instance)
+        serializer = self.get_serializer(specialist_data)
         data = serializer.data
         data["stats"] = stats
 
@@ -153,18 +184,12 @@ class SpecialistViewSet(viewsets.ModelViewSet):
     @api_error_handler
     def create(self, request, *args, **kwargs):
         """Create new specialist profile"""
-        # Check permissions
-        if not request.user.user_type in ["admin", "staff"]:
-            raise PermissionDenied(
-                "Only admins or staff can create specialist profiles"
-            )
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Placeholder for service call
-        # specialist = SpecialistService.create_specialist(**serializer.validated_data)
-        specialist = serializer.save()
+        specialist = SpecialistServiceLayer.create_specialist(
+            **serializer.validated_data
+        )
 
         return APIResponse.created(
             message="Specialist profile created successfully",
@@ -179,20 +204,17 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         # Check permissions
         if request.user.user_type == "specialist":
             if not hasattr(request.user, "specialist_profile"):
-                raise PermissionDenied("User is not a specialist")
+                raise PrivacyError("User is not a specialist")
             if request.user.specialist_profile.id != instance.id:
-                raise PermissionDenied("Cannot update another specialist's profile")
-        elif request.user.user_type not in ["admin", "staff"]:
-            raise PermissionDenied(
-                "Only admins, staff, or specialists can update profiles"
-            )
+                raise PrivacyError("Cannot update another specialist's profile")
 
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        # Placeholder for service call
-        # specialist = SpecialistService.update_specialist(instance.id, **serializer.validated_data)
-        specialist = serializer.save()
+        # Use service for business logic
+        specialist = SpecialistServiceLayer.update_specialist(
+            specialist_id=instance.id, **serializer.validated_data
+        )
 
         return APIResponse.success(
             message="Specialist profile updated",
@@ -202,7 +224,10 @@ class SpecialistViewSet(viewsets.ModelViewSet):
     @api_error_handler
     def destroy(self, request, *args, **kwargs):
         """Delete specialist profile"""
-        instance = self.get_object()
+        try:
+            instance = self.get_object()
+        except Http404:
+            raise NotFoundError("Specialist not found")
 
         # Check permissions
         if request.user.user_type not in ["admin", "staff"]:
@@ -210,11 +235,94 @@ class SpecialistViewSet(viewsets.ModelViewSet):
                 "Only admins or staff can delete specialist profiles"
             )
 
-        # Placeholder for service call
-        # SpecialistService.delete_specialist(instance.id, deleted_by=request.user)
-        instance.delete()
+        # Use service for business logic
+        SpecialistServiceLayer.delete_specialist(
+            specialist_id=instance.id, deleted_by=request.user
+        )
 
         return APIResponse.success(message="Specialist profile deleted successfully")
+
+    @api_error_handler
+    @action(detail=True, methods=["get"], url_path="services")
+    def specialist_services(self, request, pk=None):
+        """Get services offered by specialist"""
+        specialist = self.get_object()
+
+        # Get services with price overrides
+        specialist_services = specialist.services.filter(
+            is_available=True
+        ).select_related("service")
+
+        from ..serializers import SpecialistServiceSerializer
+
+        serializer = SpecialistServiceSerializer(specialist_services, many=True)
+
+        return APIResponse.success(
+            message="Specialist services retrieved", data=serializer.data
+        )
+
+    @api_error_handler
+    @action(detail=True, methods=["post"], url_path="add-service")
+    def add_service(self, request, pk=None):
+        """Add service to specialist's offerings"""
+        specialist = self.get_object()
+
+        # Check permissions
+        if not hasattr(request.user, "specialist_profile"):
+            raise PrivacyError("User is not a specialist")
+        if request.user.specialist_profile.id != specialist.id:
+            raise PrivacyError("Cannot add services to another specialist")
+
+        service_id = request.data.get("service_id")
+        price_override = request.data.get("price_override")
+
+        if not service_id:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(detail="service_id is required")
+
+        # Use service for business logic
+        specialist_service = SpecialistServiceLayer.add_service_to_specialist(
+            specialist_id=specialist.id,
+            service_id=service_id,
+            price_override=price_override,
+        )
+
+        from ..serializers import SpecialistServiceSerializer
+
+        serializer = SpecialistServiceSerializer(specialist_service)
+
+        return APIResponse.created(
+            message="Service added to specialist", data=serializer.data
+        )
+
+    @api_error_handler
+    @action(
+        detail=True, methods=["delete"], url_path=r"remove-service/(?P<service_id>\d+)"
+    )
+    def remove_service(self, request, pk=None, service_id=None):
+        """Remove service from specialist's offerings"""
+        specialist = self.get_object()
+
+        # Check permissions
+        if request.user.user_type == "specialist":
+            if not hasattr(request.user, "specialist_profile"):
+                raise PrivacyError("User is not a specialist")
+            if request.user.specialist_profile.id != specialist.id:
+                raise PrivacyError("Cannot remove services from another specialist")
+        elif request.user.user_type not in ["admin", "staff"]:
+            raise PermissionDenied(
+                "Only admins, staff, or specialists can remove services"
+            )
+
+        # Use service for business logic
+        SpecialistServiceLayer.remove_service_from_specialist(
+            specialist_id=specialist.id, service_id=service_id
+        )
+
+        return APIResponse.success(
+            message="Service removed from specialist's offerings"
+        )
 
     @api_error_handler
     @action(detail=True, methods=["get"], url_path="availability")
@@ -240,164 +348,68 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
-    @action(detail=False, methods=["get"], url_path="search")
-    def advanced_search(self, request, *args, **kwargs):
-        """Advanced search endpoint with custom parameters"""
-        return self.list(request, *args, **kwargs)
+    @action(detail=True, methods=["get"], url_path="available-slots/(?P<date>[^/.]+)")
+    def available_slots(self, request, pk=None, date=None):
+        """Get available time slots for a specific date"""
+        specialist = self.get_object()
+
+        # Use service for business logic
+        slots = SpecialistServiceLayer.get_specialist_availability_slots(
+            specialist_id=specialist.id, date=date
+        )
+
+        return APIResponse.success(message=f"Available slots for {date}", data=slots)
 
     @api_error_handler
     @action(detail=False, methods=["get"], url_path="by-specialization")
     def by_specialization(self, request):
         """List specialists grouped by specialization"""
-        # Get all specializations with counts
-        from django.db.models import Count
+        # Use service for business logic
+        result = SpecialistServiceLayer.get_specialists_by_specialization()
 
-        specializations = (
-            Specialist.objects.values("specialization")
-            .annotate(count=Count("id"))
-            .order_by("specialization")
-        )
-
-        # Get specialists for each specialization
-        result = {}
-        for spec in specializations:
-            specialization = spec["specialization"]
-            specialists = Specialist.objects.filter(
-                specialization=specialization, is_accepting_new_patients=True
-            ).select_related("user")[
-                :5
-            ]  # Limit to 5 per specialization
-
-            serializer = SpecialistSerializer(specialists, many=True)
-            result[specialization] = {
-                "count": spec["count"],
-                "specialists": serializer.data,
-            }
+        # Serialize specialists
+        for specialization, data in result.items():
+            if "top_specialists" in data:
+                serializer = SpecialistSerializer(data["top_specialists"], many=True)
+                data["top_specialists"] = serializer.data
 
         return APIResponse.success(
             message="Specialists grouped by specialization", data=result
         )
 
-    # Specialist Service Relationship Endpoints Placeholder
     @api_error_handler
-    @action(detail=True, methods=["get"], url_path="services")
-    def specialist_services(self, request, pk=None):
-        """Get services offered by specialist"""
+    @api_error_handler
+    @action(detail=True, methods=["post"], url_path="activate")
+    def activate_specialist(self, request, pk=None):
+        """Activate a deactivated specialist"""
         specialist = self.get_object()
 
-        # Get services with price overrides
-        specialist_services = specialist.services.filter(
-            is_available=True
-        ).select_related("service")
-
-        serializer = SpecialistServiceSerializer(specialist_services, many=True)
-
-        return APIResponse.success(
-            message="Specialist services retrieved", data=serializer.data
+        # Use service for business logic
+        specialist = SpecialistServiceLayer.update_specialist(
+            specialist_id=specialist.id, is_active=True, is_accepting_new_patients=True
         )
 
-    # TODO: Implement Service and improve permission checks
+        return APIResponse.success(
+            message="Specialist activated successfully",
+            data=SpecialistSerializer(specialist).data,
+        )
 
     @api_error_handler
-    @action(detail=True, methods=["post"], url_path="add-service")
-    def add_service(self, request, pk=None):
-        """Add service to specialist's offerings"""
+    @action(detail=True, methods=["post"], url_path="deactivate")
+    def deactivate_specialist(self, request, pk=None):
+        """Deactivate specialist (soft delete)"""
         specialist = self.get_object()
 
         # Check permissions
-        if request.user.user_type == "specialist":
-            if not hasattr(request.user, "specialist_profile"):
-                raise PermissionDenied("User is not a specialist")
-            if request.user.specialist_profile.id != specialist.id:
-                raise PermissionDenied("Cannot add services to another specialist")
-        elif request.user.user_type not in ["admin", "staff"]:
-            raise PermissionDenied(
-                "Only admins, staff, or specialists can add services"
-            )
+        if request.user.user_type not in ["admin", "staff"]:
+            raise PermissionDenied("Only admins or staff can deactivate specialists")
 
-        serializer = SpecialistServiceCreateSerializer(
-            data=request.data,
-            context={"request": request, "specialist_id": specialist.id},
+        # Use service for business logic
+        specialist = SpecialistServiceLayer.delete_specialist(
+            specialist_id=specialist.id, deleted_by=request.user
         )
-        serializer.is_valid(raise_exception=True)
-
-        # Create specialist-service relationship
-        specialist_service = SpecialistService.objects.create(
-            specialist=specialist,
-            service=serializer.validated_data["service"],
-            price_override=serializer.validated_data.get("price_override"),
-            is_available=True,
-        )
-
-        return APIResponse.created(
-            message="Service added to specialist",
-            data=SpecialistServiceSerializer(specialist_service).data,
-        )
-
-    @api_error_handler
-    @action(
-        detail=True, methods=["delete"], url_path=r"remove-service/(?P<service_id>\d+)"
-    )
-    def remove_service(self, request, pk=None, service_id=None):
-        """Remove service from specialist's offerings"""
-        specialist = self.get_object()
-
-        # Check permissions
-        if request.user.user_type == "specialist":
-            if not hasattr(request.user, "specialist_profile"):
-                raise PermissionDenied("User is not a specialist")
-            if request.user.specialist_profile.id != specialist.id:
-                raise PermissionDenied("Cannot remove services from another specialist")
-        elif request.user.user_type not in ["admin", "staff"]:
-            raise PermissionDenied(
-                "Only admins, staff, or specialists can remove services"
-            )
-
-        specialist_service = SpecialistService.objects.get(
-            specialist=specialist, service_id=service_id
-        )
-        # Instead of deleting, mark as unavailable
-        specialist_service.is_available = False
-        specialist_service.save()
 
         return APIResponse.success(
-            message="Service removed from specialist's offerings"
-        )
-
-    @api_error_handler
-    @action(
-        detail=True,
-        methods=["patch"],
-        url_path=r"update-service-price/(?P<service_id>\d+)",
-    )
-    def update_service_price(self, request, pk=None, service_id=None):
-        """Update price override for specialist's service"""
-        specialist = self.get_object()
-
-        # Check permissions
-        if request.user.user_type == "specialist":
-            if not hasattr(request.user, "specialist_profile"):
-                raise PermissionDenied("User is not a specialist")
-            if request.user.specialist_profile.id != specialist.id:
-                raise PermissionDenied("Cannot update services for another specialist")
-        elif request.user.user_type not in ["admin", "staff"]:
-            raise PermissionDenied(
-                "Only admins, staff, or specialists can update service prices"
-            )
-
-        specialist_service = SpecialistService.objects.get(
-            specialist=specialist, service_id=service_id
-        )
-        price_override = request.data.get("price_override")
-
-        # Validate price override
-        if price_override is not None and price_override < 0:
-            raise ValidationError(detail="Price cannot be negative")
-
-        specialist_service.price_override = price_override
-        specialist_service.save()
-
-        return APIResponse.success(
-            message="Service price updated",
-            data=SpecialistServiceSerializer(specialist_service).data,
+            message="Specialist deactivated successfully",
+            data=SpecialistSerializer(specialist).data,
         )

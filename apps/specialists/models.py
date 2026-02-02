@@ -33,7 +33,9 @@ class Specialist(models.Model):
     )
     is_accepting_new_patients = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
-    max_daily_appointments = models.IntegerField(default=20, validators=[MinValueValidator(1)])
+    max_daily_appointments = models.IntegerField(
+        default=20, validators=[MinValueValidator(1)]
+    )
     bio = models.TextField(blank=True)
     rating = models.DecimalField(
         max_digits=3,

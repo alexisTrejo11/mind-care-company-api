@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Count, Q, Avg, Sum
 from .models import Appointment
 from apps.specialists.models import Specialist
-from core.exceptions.base_exceptions import (
+from apps.core.exceptions.base_exceptions import (
     BusinessRuleError,
     NotFoundError,
     ConflictError,
@@ -245,11 +245,7 @@ class AppointmentService:
                 detail="Specialist has reached maximum daily appointments"
             )
 
-        # Create appointment
         appointment = Appointment.objects.create(**validated_data)
-
-        # Log creation
-        # AppointmentAuditService.log_creation(appointment, validated_by=request.user)
 
         return appointment
 

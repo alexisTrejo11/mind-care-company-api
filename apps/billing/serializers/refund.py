@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from ..models import Refund
+from ..models import Refund, InsuranceClaim
 
 
 User = get_user_model()
@@ -74,3 +74,47 @@ class RefundSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+
+class InsuranceClaimSerializer(serializers.ModelSerializer):
+    """Serializer for reading insurance claim data"""
+
+    patient_name = serializers.CharField(source="patient.get_full_name", read_only=True)
+    bill_number = serializers.CharField(source="bill.bill_number", read_only=True)
+
+    class Meta:
+        model = InsuranceClaim
+        fields = [
+            "id",
+            "claim_number",
+            "bill",
+            "bill_number",
+            "patient",
+            "patient_name",
+            "insurance_company",
+            "policy_number",
+            "group_number",
+            "subscriber_name",
+            "subscriber_relationship",
+            "diagnosis_codes",
+            "procedure_codes",
+            "total_claimed_amount",
+            "insurance_responsibility",
+            "patient_responsibility",
+            "denied_amount",
+            "status",
+            "date_of_service",
+            "date_submitted",
+            "date_acknowledged",
+            "date_processed",
+            "date_paid",
+            "edi_file_name",
+            "edi_reference_number",
+            "payer_claim_number",
+            "notes",
+            "denial_reason",
+            "appeal_notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields

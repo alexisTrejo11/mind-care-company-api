@@ -8,8 +8,8 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from core.decorators.error_handler import api_error_handler
-from core.responses.api_response import APIResponse
+from apps.core.decorators.error_handler import api_error_handler
+from apps.core.responses.api_response import APIResponse
 from .models import MedicalRecord
 from .serializers import (
     MedicalRecordSerializer,

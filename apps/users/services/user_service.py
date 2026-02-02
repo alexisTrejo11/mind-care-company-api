@@ -5,7 +5,7 @@ from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from ..models import User
-from core.shared import (
+from apps.core.shared import (
     generate_jwt_tokens,
     generate_activation_token,
     verify_activation_token,
@@ -13,7 +13,7 @@ from core.shared import (
     verify_password_reset_token,
     delete_password_reset_token,
 )
-from core.exceptions.base_exceptions import (
+from apps.core.exceptions.base_exceptions import (
     AuthenticationError,
     ValidationError,
     UserNotFoundError,

@@ -1,19 +1,19 @@
 from rest_framework import serializers
 from django.utils import timezone
-from django.contrib.auth import get_user_model
+from datetime import datetime, timedelta
+from decimal import Decimal
 
 from ..models import Bill, BillItem
 from apps.appointments.models import Appointment
-
-User = get_user_model()
+from apps.specialists.models import Service
+from django.core.exceptions import ValidationError
+from apps.core.exceptions.base_exceptions import NotFoundError
 
 
 class BillItemSerializer(serializers.ModelSerializer):
-    """Serializer for bill items"""
+    """Serializer for reading BillItem data"""
 
-    net_amount = serializers.DecimalField(
-        max_digits=10, decimal_places=2, read_only=True
-    )
+    service_name = serializers.CharField(source="service.name", read_only=True)
 
     class Meta:
         model = BillItem
@@ -29,7 +29,9 @@ class BillItemSerializer(serializers.ModelSerializer):
             "discount_amount",
             "net_amount",
             "service",
+            "service_name",
             "created_at",
+            "updated_at",
         ]
         read_only_fields = [
             "id",
@@ -37,102 +39,103 @@ class BillItemSerializer(serializers.ModelSerializer):
             "tax_amount",
             "discount_amount",
             "net_amount",
+            "service_name",
             "created_at",
+            "updated_at",
         ]
+
+
+class BillItemCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating BillItem"""
+
+    service_id = serializers.IntegerField(required=False, allow_null=True)
+
+    class Meta:
+        model = BillItem
+        fields = [
+            "description",
+            "quantity",
+            "unit_price",
+            "tax_rate",
+            "discount_rate",
+            "service_id",
+        ]
+
+    def validate_service_id(self, value):
+        if value is not None:
+            try:
+                Service.objects.get(id=value)
+            except Service.DoesNotExist:
+                raise NotFoundError(detail="Service not found")
+        return value
 
     def validate_quantity(self, value):
         if value <= 0:
-            raise serializers.ValidationError("Quantity must be greater than 0")
+            raise ValidationError(message="Quantity must be greater than 0")
         return value
 
     def validate_unit_price(self, value):
         if value < 0:
-            raise serializers.ValidationError("Unit price cannot be negative")
+            raise ValidationError(message="Unit price cannot be negative")
+        return value
+
+    def validate_tax_rate(self, value):
+        if value < 0 or value > 100:
+            raise ValidationError(message="Tax rate must be between 0 and 100")
+        return value
+
+    def validate_discount_rate(self, value):
+        if value < 0 or value > 100:
+            raise ValidationError(message="Discount rate must be between 0 and 100")
         return value
 
 
 class BillSerializer(serializers.ModelSerializer):
-    """Base serializer for bills"""
+    """Serializer for reading Bill data"""
 
     patient_name = serializers.CharField(source="patient.get_full_name", read_only=True)
     patient_email = serializers.EmailField(source="patient.email", read_only=True)
-    patient_phone = serializers.CharField(source="patient.phone", read_only=True)
-
     appointment_date = serializers.DateTimeField(
         source="appointment.appointment_date", read_only=True
     )
-    specialist_name = serializers.CharField(
-        source="appointment.specialist.user.get_full_name", read_only=True
-    )
+    items = serializers.SerializerMethodField(read_only=True)
 
-    payment_status_display = serializers.CharField(
-        source="get_payment_status_display", read_only=True
-    )
-    invoice_status_display = serializers.CharField(
-        source="get_invoice_status_display", read_only=True
-    )
-    payment_method_display = serializers.CharField(
-        source="get_payment_method_display", read_only=True
-    )
-
-    items = BillItemSerializer(many=True, read_only=True)
-    items_total = serializers.DecimalField(
-        max_digits=10, decimal_places=2, read_only=True, source="calculate_items_total"
-    )
-
-    days_overdue = serializers.SerializerMethodField()
-    can_pay_online = serializers.SerializerMethodField()
-    payment_url = serializers.SerializerMethodField()
+    def get_items(self, obj):
+        """Get serialized bill items"""
+        items = obj.items.all()
+        return BillItemSerializer(items, many=True).data
 
     class Meta:
         model = Bill
         fields = [
             "id",
             "bill_number",
-            "appointment",
-            "appointment_date",
             "patient",
             "patient_name",
             "patient_email",
-            "patient_phone",
+            "appointment",
             "specialist_name",
-            # Financial
+            "appointment_type",
+            "appointment_date",
             "subtotal",
             "tax_amount",
             "discount_amount",
             "total_amount",
             "amount_paid",
             "balance_due",
-            # Status
             "invoice_status",
-            "invoice_status_display",
             "payment_status",
-            "payment_status_display",
             "payment_method",
-            "payment_method_display",
-            # Insurance
             "insurance_company",
             "policy_number",
-            "insurance_claim_id",
             "insurance_coverage",
             "patient_responsibility",
-            # Dates
             "invoice_date",
             "due_date",
             "paid_date",
-            "days_overdue",
-            # Items
-            "items",
-            "items_total",
-            # Payment
-            "can_pay_online",
-            "payment_url",
-            # Stripe
-            "stripe_payment_intent_id",
-            # Notes
             "notes",
-            "terms_and_conditions",
-            # Metadata
+            "stripe_payment_intent_id",
+            "items",
             "created_at",
             "updated_at",
         ]
@@ -141,163 +144,129 @@ class BillSerializer(serializers.ModelSerializer):
             "bill_number",
             "created_at",
             "updated_at",
+            "items",
+            "patient_name",
+            "patient_email",
+            "specialist_name",
+            "appointment_type",
+            "appointment_date",
+        ]
+
+
+# TODO: Get Appointment Entity Directly
+class BillCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating bills"""
+
+    appointment_id = serializers.IntegerField(required=True)
+
+    class Meta:
+        model = Bill
+        fields = [
+            "appointment_id",
             "subtotal",
             "tax_amount",
             "discount_amount",
             "total_amount",
-            "amount_paid",
-            "balance_due",
-            "patient_responsibility",
-            "invoice_date",
-            "payment_status_display",
-            "invoice_status_display",
-            "payment_method_display",
-            "days_overdue",
-            "can_pay_online",
-            "payment_url",
-            "items_total",
-        ]
-
-    def get_days_overdue(self, obj) -> int:
-        """Calculate days overdue"""
-        if obj.payment_status == "overdue":
-            return (timezone.now().date() - obj.due_date).days
-        return 0
-
-    def get_can_pay_online(self, obj) -> bool:
-        """Check if bill can be paid online"""
-        return (
-            obj.payment_status in ["pending", "partial", "overdue"]
-            and obj.balance_due > 0
-        )
-
-    def get_payment_url(self, obj) -> str:
-        """Get payment URL"""
-        return obj.get_payment_url() if self.get_can_pay_online(obj) else ""
-
-    def validate_due_date(self, value):
-        """Validate due date"""
-        if value < timezone.now().date():
-            raise serializers.ValidationError("Due date cannot be in the past")
-        return value
-
-    def validate(self, attrs):
-        """Cross-field validation"""
-        # Ensure due date is after invoice date
-        if "due_date" in attrs:
-            invoice_date = (
-                self.instance.invoice_date if self.instance else timezone.now().date()
-            )
-            if attrs["due_date"] <= invoice_date:
-                raise serializers.ValidationError(
-                    {"due_date": "Due date must be after invoice date"}
-                )
-
-        return attrs
-
-
-class BillCreateSerializer(BillSerializer):
-    """Serializer for creating bills"""
-
-    appointment_id = serializers.IntegerField(write_only=True, required=True)
-
-    class Meta(BillSerializer.Meta):
-        fields = BillSerializer.Meta.fields + ["appointment_id"]
-        read_only_fields = [
-            f
-            for f in BillSerializer.Meta.read_only_fields
-            if f not in ["appointment", "appointment_date"]
+            "due_date",
+            "insurance_company",
+            "policy_number",
+            "notes",
         ]
 
     def validate_appointment_id(self, value):
-        """Validate appointment"""
         try:
             appointment = Appointment.objects.get(id=value)
-
-            # Check if appointment is completed
-            if appointment.status != "completed":
-                raise serializers.ValidationError(
-                    "Bills can only be created for completed appointments"
-                )
-
-            # Check if bill already exists
-            if hasattr(appointment, "bill"):
-                raise serializers.ValidationError(
-                    "Bill already exists for this appointment"
-                )
-
-            return value
-
         except Appointment.DoesNotExist:
-            raise serializers.ValidationError("Appointment not found")
+            raise NotFoundError(detail="Appointment not found")
 
-    def create(self, validated_data):
-        """Create bill with items"""
-        from .services import BillingService
+        # Check if bill already exists for this appointment
+        if hasattr(appointment, "bill"):
+            raise ValidationError(message="Bill already exists for this appointment")
 
-        appointment_id = validated_data.pop("appointment_id")
+        return value
 
-        # Create bill using service
-        bill = BillingService.create_bill_from_appointment(
-            appointment_id=appointment_id,
-            created_by=self.context["request"].user,
-            **validated_data,
-        )
+    def validate_due_date(self, value):
+        if value <= timezone.now().date():
+            raise ValidationError(message="Due date must be in the future")
 
-        return bill
+        # Due date should be within 30 days
+        max_due_date = timezone.now().date() + timedelta(days=30)
+        if value > max_due_date:
+            raise ValidationError(
+                message=f"Due date cannot be more than 30 days in the future"
+            )
+
+        return value
+
+    def validate(self, data):
+        # Validate amount consistency
+        subtotal = data.get("subtotal", 0)
+        tax_amount = data.get("tax_amount", 0)
+        discount_amount = data.get("discount_amount", 0)
+        total_amount = data.get("total_amount", 0)
+
+        calculated_total = subtotal + tax_amount - discount_amount
+
+        if abs(total_amount - calculated_total) > 0.01:  # Allow 1 cent tolerance
+            raise ValidationError(
+                message=f"Total amount ({total_amount}) doesn't match calculation ({calculated_total})"
+            )
+
+        # Validate insurance information
+        insurance_company = data.get("insurance_company")
+        policy_number = data.get("policy_number")
+
+        if (insurance_company and not policy_number) or (
+            policy_number and not insurance_company
+        ):
+            raise ValidationError(
+                message="Both insurance company and policy number are required for insurance billing"
+            )
+
+        return data
 
 
-class BillUpdateSerializer(BillSerializer):
-    """Serializer for updating bills (limited fields)"""
+class BillUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating bills"""
 
-    class Meta(BillSerializer.Meta):
-        read_only_fields = BillSerializer.Meta.read_only_fields + [
-            "appointment",
-            "patient",
-            "bill_number",
-            "subtotal",
-            "tax_amount",
+    class Meta:
+        model = Bill
+        fields = [
+            "notes",
+            "terms_and_conditions",
             "discount_amount",
-            "total_amount",
-            "insurance_company",
-            "policy_number",
+            "due_date",
         ]
 
+    def validate_due_date(self, value):
+        if value <= timezone.now().date():
+            raise ValidationError(message="Due date must be in the future")
+        return value
 
-class BillingStatsSerializer(serializers.Serializer):
-    """Serializer for billing statistics"""
-
-    period = serializers.ChoiceField(
-        choices=["today", "week", "month", "quarter", "year"], default="month"
-    )
-    start_date = serializers.DateField(required=False)
-    end_date = serializers.DateField(required=False)
-    specialist_id = serializers.IntegerField(required=False)
+    def validate_discount_amount(self, value):
+        if value < 0:
+            raise ValidationError(message="Discount amount cannot be negative")
+        return value
 
 
 class BillFilterSerializer(serializers.Serializer):
     """Serializer for filtering bills"""
 
-    patient_id = serializers.UUIDField(required=False)
+    patient_id = serializers.IntegerField(required=False)
     specialist_id = serializers.IntegerField(required=False)
-    payment_status = serializers.ChoiceField(
-        choices=Bill.PAYMENT_STATUS_CHOICES, required=False
-    )
-    invoice_status = serializers.ChoiceField(
-        choices=Bill.INVOICE_STATUS_CHOICES, required=False
-    )
+    appointment_id = serializers.IntegerField(required=False)
+    payment_status = serializers.CharField(required=False)
+    invoice_status = serializers.CharField(required=False)
     start_date = serializers.DateField(required=False)
     end_date = serializers.DateField(required=False)
     min_amount = serializers.DecimalField(
-        max_digits=10, decimal_places=2, required=False
+        max_digits=10, decimal_places=2, min_value=0, required=False
     )
     max_amount = serializers.DecimalField(
-        max_digits=10, decimal_places=2, required=False
+        max_digits=10, decimal_places=2, min_value=0, required=False
     )
     has_insurance = serializers.BooleanField(required=False)
     search = serializers.CharField(required=False, max_length=100)
-    page = serializers.IntegerField(min_value=1, default=1)
-    page_size = serializers.IntegerField(min_value=1, max_value=100, default=20)
     ordering = serializers.ChoiceField(
         choices=[
             "invoice_date",
@@ -312,3 +281,14 @@ class BillFilterSerializer(serializers.Serializer):
         required=False,
         default="-invoice_date",
     )
+    page = serializers.IntegerField(min_value=1, default=1)
+    page_size = serializers.IntegerField(min_value=1, max_value=100, default=20)
+
+
+class BillingStatsSerializer(serializers.Serializer):
+    """Serializer for billing statistics parameters"""
+
+    period = serializers.ChoiceField(
+        choices=["today", "week", "month", "year", "all_time"], required=True
+    )
+    specialist_id = serializers.IntegerField(required=False)

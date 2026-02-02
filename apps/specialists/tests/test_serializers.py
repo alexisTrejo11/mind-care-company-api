@@ -20,7 +20,7 @@ from apps.specialists.serializers import (
     SpecialistServiceSerializer,
     SpecialistServiceCreateSerializer,
 )
-from core.exceptions.base_exceptions import NotFoundError
+from apps.core.exceptions.base_exceptions import NotFoundError
 
 User = get_user_model()
 

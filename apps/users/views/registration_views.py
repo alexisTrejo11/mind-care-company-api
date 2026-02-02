@@ -1,8 +1,8 @@
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
-from core.decorators.error_handler import api_error_handler
-from core.decorators.rate_limit import rate_limit
-from core.responses.api_response import APIResponse
+from apps.core.decorators.error_handler import api_error_handler
+from apps.core.decorators.rate_limit import rate_limit
+from apps.core.responses.api_response import APIResponse
 from ..services.user_service import UserService
 from ..serializers import UserRegistrationSerializer
 

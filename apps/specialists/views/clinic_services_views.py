@@ -1,14 +1,14 @@
+from django.http import Http404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q, Count, Avg, Sum
 
-from core.decorators.error_handler import api_error_handler
-from core.responses.api_response import APIResponse
-from core.permissions import IsAdminOrStaff
+from apps.core.decorators.error_handler import api_error_handler
+from apps.core.responses.api_response import APIResponse
+from apps.core.permissions import IsAdminOrStaff
 from ..models import Specialist, Service, SpecialistService
 from ..serializers import (
     ServiceSerializer,
@@ -17,11 +17,10 @@ from ..serializers import (
     ServiceSearchSerializer,
     ServiceStatsSerializer,
     SpecialistServiceSerializer,
-    SpecialistSerializer,
 )
-from core.exceptions.base_exceptions import NotFoundError, ValidationError
+from apps.core.exceptions.base_exceptions import NotFoundError, ValidationError
 
-from ..services import ServiceService
+from ..services import ServiceServiceLayer
 
 
 class ServiceViewSet(viewsets.ModelViewSet):
@@ -63,6 +62,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
             "partial_update",
             "destroy",
             "reactivate",
+            "activate",
             "stats",
             "add_to_specialist",
         ]:
@@ -155,58 +155,61 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
     @api_error_handler
     def create(self, request, *args, **kwargs):
-        """Create new service using ServiceService"""
+        """Create new service using ServiceServiceLayer"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        serviceCreated = ServiceService.create_service(**serializer.validated_data)
+        service_created = ServiceServiceLayer.create_service(
+            **serializer.validated_data
+        )
 
         return APIResponse.created(
             message="Service created successfully",
-            data=ServiceSerializer(serviceCreated).data,
+            data=ServiceSerializer(service_created).data,
         )
 
     @api_error_handler
     def update(self, request, *args, **kwargs):
-        """Update service"""
+        """Update service using ServiceServiceLayer"""
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        serviceUpdated = ServiceService.update_service(
+        service_updated = ServiceServiceLayer.update_service(
             instance, **serializer.validated_data
         )
 
         return APIResponse.success(
             message="Service updated successfully",
-            data=ServiceSerializer(serviceUpdated).data,
+            data=ServiceSerializer(service_updated).data,
         )
 
     @api_error_handler
     def destroy(self, request, *args, **kwargs):
-        """Deactivate service"""
-        instance = self.get_object()
+        """Deactivate service using ServiceServiceLayer"""
+        try:
+            instance = self.get_object()
+        except Http404:
+            raise NotFoundError(detail="Service not found")
 
-        # TODO: Move to ServiceService if more logic is added
-        instance.is_active = False
-        instance.save()
-
-        # Also deactivate all specialist-service relationships
-        SpecialistService.objects.filter(service=instance).update(is_available=False)
+        # Use service layer for business logic
+        ServiceServiceLayer.deactivate_service(instance, deactivated_by=request.user)
 
         return APIResponse.success(message="Service deactivated successfully")
 
     @api_error_handler
     @action(detail=True, methods=["post"], url_path="reactivate")
     def reactivate(self, request, pk=None):
-        """Reactivate a deactivated service"""
+        """Reactivate a deactivated service using ServiceServiceLayer"""
         instance = self.get_object()
-        instance.is_active = True
-        instance.save()
+
+        service_reactivated = ServiceServiceLayer.reactivate_service(
+            instance, reactivated_by=request.user
+        )
 
         return APIResponse.success(
             message="Service reactivated successfully",
-            data=ServiceSerializer(instance).data,
+            data=ServiceSerializer(service_reactivated).data,
         )
 
     @api_error_handler
@@ -247,42 +250,16 @@ class ServiceViewSet(viewsets.ModelViewSet):
     @api_error_handler
     @action(detail=False, methods=["get"], url_path="by-category")
     def by_category(self, request):
-        """List services grouped by category"""
-        # Get all categories with counts
-        categories = (
-            Service.objects.filter(is_active=True)
-            .values("category")
-            .annotate(
-                count=Count("id"),
-                avg_duration=Avg("duration_minutes"),
-                avg_price=Avg("base_price"),
-            )
-            .order_by("category")
-        )
+        """List services grouped by category using ServiceServiceLayer"""
 
-        # Get services for each category
-        result = {}
-        for cat in categories:
-            category = cat["category"]
-            services = Service.objects.filter(category=category, is_active=True)[
-                :5
-            ]  # Limit to 5 per category
-
-            serializer = ServiceSerializer(services, many=True)
-            result[category] = {
-                "display_name": dict(Service.CATEGORY_CHOICES).get(category, category),
-                "count": cat["count"],
-                "avg_duration": float(cat["avg_duration"] or 0),
-                "avg_price": float(cat["avg_price"] or 0),
-                "services": serializer.data,
-            }
+        result = ServiceServiceLayer.get_services_grouped_by_category()
 
         return APIResponse.success(message="Services grouped by category", data=result)
 
     @api_error_handler
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
-        """Get service statistics"""
+        """Get service statistics using ServiceServiceLayer"""
 
         # Validate parameters
         stats_serializer = ServiceStatsSerializer(data=request.query_params)
@@ -291,63 +268,17 @@ class ServiceViewSet(viewsets.ModelViewSet):
         period = stats_serializer.validated_data["period"]
         include_inactive = stats_serializer.validated_data["include_inactive"]
 
-        queryset = Service.objects.all()
-        if not include_inactive:
-            queryset = queryset.filter(is_active=True)
-
-        # Calculate statistics
-        total_services = queryset.count()
-        total_active = Service.objects.filter(is_active=True).count()
-
-        by_category = (
-            queryset.values("category")
-            .annotate(
-                count=Count("id"),
-                avg_duration=Avg("duration_minutes"),
-                avg_price=Avg("base_price"),
-                total_price=Sum("base_price"),
-            )
-            .order_by("-count")
+        # Use service layer for business logic
+        stats = ServiceServiceLayer.get_service_statistics(
+            period=period, include_inactive=include_inactive
         )
-
-        # Most popular services by specialist count
-        popular_services = (
-            Service.objects.filter(is_active=True)
-            .annotate(
-                specialist_count=Count(
-                    "specialists", filter=Q(specialists__is_available=True)
-                )
-            )
-            .order_by("-specialist_count")[:10]
-        )
-
-        popular_services_data = ServiceSerializer(popular_services, many=True).data
-
-        stats = {
-            "period": period,
-            "summary": {
-                "total_services": total_services,
-                "total_active": total_active,
-                "total_inactive": total_services - total_active,
-                "inactive_percentage": round(
-                    (
-                        ((total_services - total_active) / total_services * 100)
-                        if total_services > 0
-                        else 0
-                    ),
-                    2,
-                ),
-            },
-            "by_category": list(by_category),
-            "most_popular": popular_services_data,
-        }
 
         return APIResponse.success(message="Service statistics retrieved", data=stats)
 
     @api_error_handler
     @action(detail=True, methods=["post"], url_path="add-to-specialist")
     def add_to_specialist(self, request, pk=None):
-        """Add service to specialist's offerings"""
+        """Add service to specialist's offerings using ServiceServiceLayer"""
         service = self.get_object()
 
         # Validate specialist exists
@@ -371,19 +302,15 @@ class ServiceViewSet(viewsets.ModelViewSet):
                 "Only admins, staff, or specialists can add services"
             )
 
-        # Check if already exists
-        if SpecialistService.objects.filter(
-            specialist=specialist, service=service
-        ).exists():
-            raise ValidationError(detail="Specialist already offers this service")
-
-        # Create specialist-service relationship
+        # Get price override
         price_override = request.data.get("price_override")
-        specialist_service = SpecialistService.objects.create(
-            specialist=specialist,
+
+        # Use service layer for business logic
+        specialist_service = ServiceServiceLayer.add_service_to_specialist(
             service=service,
+            specialist=specialist,
             price_override=price_override,
-            is_available=True,
+            added_by=request.user,
         )
 
         return APIResponse.created(

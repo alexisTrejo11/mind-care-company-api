@@ -9,9 +9,9 @@ from django.utils import timezone
 from django.http import Http404
 
 
-from core.decorators.error_handler import api_error_handler
-from core.permissions import IsPatient, IsSpecialistOrStaff
-from core.responses.api_response import APIResponse
+from apps.core.decorators.error_handler import api_error_handler
+from apps.core.permissions import IsPatient, IsSpecialistOrStaff
+from apps.core.responses.api_response import APIResponse
 
 from .services import AppointmentService
 from .models import Appointment

@@ -2,7 +2,7 @@ import logging
 from typing import Dict, Any, List
 from django.contrib.auth import get_user_model
 
-from core.exceptions.base_exceptions import (
+from apps.core.exceptions.base_exceptions import (
     ValidationError,
     NotFoundError,
     ConflictError,

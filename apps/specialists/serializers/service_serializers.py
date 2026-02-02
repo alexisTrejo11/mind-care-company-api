@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from core.exceptions.base_exceptions import NotFoundError
+from apps.core.exceptions.base_exceptions import NotFoundError
 from ..models import Service, SpecialistService
 
 

@@ -2,7 +2,7 @@ import stripe
 from django.conf import settings
 import logging
 from typing import Dict, Any
-from core.exceptions.base_exceptions import PaymentError, NotFoundError
+from apps.core.exceptions.base_exceptions import PaymentError, NotFoundError
 from apps.users.models import User
 from apps.billing.models import Payment, Refund
 

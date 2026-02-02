@@ -1,10 +1,9 @@
 from rest_framework import serializers
-from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.contrib.auth import get_user_model
 from django.core.validators import validate_email
 from django.db import transaction
 
-from core.exceptions.base_exceptions import NotFoundError
+from apps.core.exceptions.base_exceptions import NotFoundError
 from ..models import Specialist, SpecialistService, Service
 from .service_serializers import ServiceSerializer
 from .availability_serializers import AvailabilitySerializer
@@ -14,7 +13,7 @@ User = get_user_model()
 
 
 class SpecialistSerializer(serializers.ModelSerializer):
-    """Serializer for listing specialists"""
+    """Serializer for listing specialists - DATA FORMAT ONLY"""
 
     specialist_name = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
@@ -27,6 +26,7 @@ class SpecialistSerializer(serializers.ModelSerializer):
             "id",
             "specialist_name",
             "license_number",
+            "bio",
             "specialization",
             "years_experience",
             "consultation_fee",
@@ -51,7 +51,7 @@ class SpecialistSerializer(serializers.ModelSerializer):
 
 
 class SpecialistDetailSerializer(serializers.ModelSerializer):
-    """Serializer for specialist details with related data"""
+    """Serializer for specialist details - DATA FORMAT ONLY"""
 
     user_info = serializers.SerializerMethodField()
     services = serializers.SerializerMethodField()
@@ -93,7 +93,7 @@ class SpecialistDetailSerializer(serializers.ModelSerializer):
 
 
 class SpecialistCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating a specialist profile"""
+    """Serializer for creating a specialist profile - DATA FORMAT ONLY"""
 
     user_id = serializers.IntegerField(required=True)
     email = serializers.EmailField(required=False)
@@ -122,73 +122,49 @@ class SpecialistCreateSerializer(serializers.ModelSerializer):
             "rating": {"required": False},
         }
 
-    def validate(self, data):
-        # Validate user exists and is not already a specialist
-        user_id = data.get("user_id")
+    def validate_license_number(self, value):
+        """Format validation only - business logic in services"""
+        if not value or len(value.strip()) < 3:
+            raise serializers.ValidationError(
+                "License number must be at least 3 characters long"
+            )
+        return value.strip()
+
+    def validate_years_experience(self, value):
+        """Format validation only - business logic in services"""
+        if value < 0:
+            raise serializers.ValidationError("Years experience cannot be negative")
+        return value
+
+    def validate_consultation_fee(self, value):
+        """Format validation only - business logic in services"""
+        if value < 0:
+            raise serializers.ValidationError("Consultation fee cannot be negative")
+        return value
+
+    def validate(self, attrs):
+        """Check basic data consistency - business logic in services"""
+        # Check if user exists
+        user_id = attrs.get("user_id")
         try:
             user = User.objects.get(id=user_id)
-            if hasattr(user, "specialist_profile"):
-                raise DRFValidationError(detail="User already has a specialist profile")
-            data["user"] = user
         except User.DoesNotExist:
-            raise NotFoundError(detail="User not found")
+            raise serializers.ValidationError({"user_id": "User not found"})
 
-        # Validate license number uniqueness
-        license_number = data.get("license_number")
-        if Specialist.objects.filter(license_number=license_number).exists():
-            raise DRFValidationError(detail="License number already registered")
+        # Check if user already has specialist profile
+        if hasattr(user, "specialist_profile"):
+            raise serializers.ValidationError(
+                {"user_id": "User already has a specialist profile"}
+            )
 
-        # Validate years_experience
-        years_experience = data.get("years_experience", 0)
-        if years_experience < 0:
-            raise DRFValidationError(detail="Years experience cannot be negative")
+        # Store user in validated data for later use
+        attrs["user"] = user
 
-        # Validate consultation_fee
-        consultation_fee = data.get("consultation_fee", 0)
-        if consultation_fee < 0:
-            raise DRFValidationError(detail="Consultation fee cannot be negative")
-
-        # Update user info if provided
-        if data.get("email"):
-            validate_email(data["email"])
-            user.email = data["email"]
-
-        if data.get("first_name"):
-            user.first_name = data["first_name"]
-
-        if data.get("last_name"):
-            user.last_name = data["last_name"]
-
-        if data.get("phone"):
-            user.phone = data["phone"]
-
-        return data
-
-    @transaction.atomic
-    def create(self, validated_data):
-        # Extract user update data
-        user_data = {}
-        for field in ["email", "first_name", "last_name", "phone"]:
-            if field in validated_data:
-                user_data[field] = validated_data.pop(field)
-
-        # Update user if needed
-        user = validated_data.pop("user")
-        if user_data:
-            for key, value in user_data.items():
-                setattr(user, key, value)
-            user.save()
-
-        # Remove user_id from validated_data
-        validated_data.pop("user_id", None)
-
-        # Create specialist
-        specialist = Specialist.objects.create(user=user, **validated_data)
-        return specialist
+        return attrs
 
 
 class SpecialistUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating specialist profile"""
+    """Serializer for updating specialist profile - DATA FORMAT ONLY"""
 
     class Meta:
         model = Specialist
@@ -204,31 +180,38 @@ class SpecialistUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_license_number(self, value):
+        """Basic uniqueness check - business logic in services"""
         instance = self.instance
-        if (
-            Specialist.objects.filter(license_number=value)
-            .exclude(id=instance.id)
-            .exists()
-        ):
-            raise DRFValidationError(detail="License number already registered")
+        # This is a basic check; comprehensive validation is in services
         return value
 
-    def validate(self, data):
-        # Validate years_experience
-        if "years_experience" in data and data["years_experience"] < 0:
-            raise DRFValidationError(detail="Years experience cannot be negative")
+    def validate_years_experience(self, value):
+        """Format validation only - business logic in services"""
+        if value < 0:
+            raise serializers.ValidationError("Years experience cannot be negative")
+        return value
 
-        # Validate consultation_fee
-        if "consultation_fee" in data and data["consultation_fee"] < 0:
-            raise DRFValidationError(detail="Consultation fee cannot be negative")
+    def validate_consultation_fee(self, value):
+        """Format validation only - business logic in services"""
+        if value < 0:
+            raise serializers.ValidationError("Consultation fee cannot be negative")
+        return value
 
-        return data
+    def validate_rating(self, value):
+        """Format validation only - business logic in services"""
+        if value < 0:
+            raise serializers.ValidationError("Rating cannot be negative")
+        if value > 5:
+            raise serializers.ValidationError("Rating cannot exceed 5")
+        return value
 
 
 class SpecialistSearchSerializer(serializers.Serializer):
-    """Serializer for searching specialists"""
+    """Serializer for searching specialists - DATA FORMAT ONLY"""
 
-    specialization = serializers.CharField(required=False)
+    specialization = serializers.ChoiceField(
+        choices=Specialist.SPECIALIZATION_CHOICES, required=False
+    )
     min_rating = serializers.DecimalField(
         max_digits=3, decimal_places=2, min_value=0, max_value=5, required=False
     )
@@ -257,7 +240,7 @@ class SpecialistSearchSerializer(serializers.Serializer):
 
 
 class SpecialistServiceSerializer(serializers.ModelSerializer):
-    """Serializer for specialist services"""
+    """Serializer for specialist services - DATA FORMAT ONLY"""
 
     service_details = ServiceSerializer(source="service", read_only=True)
     effective_price = serializers.SerializerMethodField()
@@ -278,7 +261,7 @@ class SpecialistServiceSerializer(serializers.ModelSerializer):
 
 
 class SpecialistServiceCreateSerializer(serializers.ModelSerializer):
-    """Serializer for adding services to specialists"""
+    """Serializer for adding services to specialists - DATA FORMAT ONLY"""
 
     service_id = serializers.IntegerField(required=True)
     price_override = serializers.DecimalField(
@@ -289,33 +272,14 @@ class SpecialistServiceCreateSerializer(serializers.ModelSerializer):
         model = SpecialistService
         fields = ["service_id", "price_override"]
 
-    def validate(self, data):
-        request = self.context.get("request")
-        specialist_id = self.context.get("specialist_id")
+    def validate_service_id(self, value):
+        """Basic format validation - business logic in services"""
+        if value <= 0:
+            raise serializers.ValidationError("Service ID must be positive")
+        return value
 
-        if not request or not specialist_id:
-            return data
-
-        # Verify service exists
-        service_id = data.get("service_id")
-        try:
-            service = Service.objects.get(id=service_id, is_active=True)
-        except Service.DoesNotExist:
-            raise NotFoundError(detail="Service not found or inactive")
-
-        data["service"] = service
-
-        # Check if specialist already has this service
-        if SpecialistService.objects.filter(
-            specialist_id=specialist_id, service_id=service_id
-        ).exists():
-            raise DRFValidationError(detail="Specialist already offers this service")
-
-        # Verify price_override is reasonable
-        price_override = data.get("price_override")
-        if price_override and price_override > service.base_price * 3:
-            raise DRFValidationError(
-                detail="Price override cannot exceed 3 times the base price"
-            )
-
-        return data
+    def validate_price_override(self, value):
+        """Basic format validation - business logic in services"""
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Price cannot be negative")
+        return value

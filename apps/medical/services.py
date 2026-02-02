@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied
 
 from .models import MedicalRecord
 from apps.appointments.models import Appointment
-from core.exceptions.base_exceptions import (
+from apps.core.exceptions.base_exceptions import (
     BusinessRuleError,
     ValidationError,
     NotFoundError,

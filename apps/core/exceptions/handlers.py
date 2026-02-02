@@ -5,7 +5,7 @@ from rest_framework import status
 import logging
 
 from .base_exceptions import MindCareBaseException
-from core.responses.api_response import APIResponse
+from apps.core.responses.api_response import APIResponse
 
 logger = logging.getLogger(__name__)
 

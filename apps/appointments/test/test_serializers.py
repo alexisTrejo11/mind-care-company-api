@@ -8,7 +8,7 @@ from apps.appointments.serializers import (
 from apps.appointments.models import Appointment
 from apps.specialists.models import Specialist
 from apps.users.models import User
-from core.exceptions.base_exceptions import ValidationError, NotFoundError
+from apps.core.exceptions.base_exceptions import ValidationError, NotFoundError
 
 
 class AppointmentCreateSerializerTestCase(TestCase):

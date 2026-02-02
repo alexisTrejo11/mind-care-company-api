@@ -19,7 +19,7 @@ def send_activation_email(self, user_id, user_email, user_name, activation_token
     Send account activation email to user
     """
     try:
-        from core.shared import get_activation_url
+        from apps.core.shared import get_activation_url
 
         activation_url = get_activation_url(activation_token)
 
@@ -104,7 +104,7 @@ def send_password_reset_email(self, user_email, user_name, reset_token):
     Send password reset email to user
     """
     try:
-        from core.shared import get_password_reset_url
+        from apps.core.shared import get_password_reset_url
 
         reset_url = get_password_reset_url(reset_token)
 

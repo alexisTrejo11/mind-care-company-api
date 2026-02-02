@@ -1,9 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from core.decorators.error_handler import api_error_handler
-from core.decorators.rate_limit import rate_limit
-from core.responses.api_response import APIResponse
-from core.shared import mask_email
+from apps.core.decorators.error_handler import api_error_handler
+from apps.core.decorators.rate_limit import rate_limit
+from apps.core.responses.api_response import APIResponse
+from apps.core.shared import mask_email
 from ..services.user_service import UserService
 from ..serializers import (
     PasswordResetRequestSerializer,

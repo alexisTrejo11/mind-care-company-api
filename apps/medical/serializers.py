@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from .models import MedicalRecord
 from apps.appointments.models import Appointment
-from core.exceptions.base_exceptions import ValidationError, NotFoundError
+from apps.core.exceptions.base_exceptions import ValidationError, NotFoundError
 
 User = get_user_model()
 

@@ -6,7 +6,7 @@ from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 
-from core.exceptions.base_exceptions import (
+from apps.core.exceptions.base_exceptions import (
     ValidationError,
     NotificationError,
     ServiceUnavailableError,

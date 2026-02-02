@@ -127,7 +127,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "EXCEPTION_HANDLER": "core.exceptions.handlers.custom_exception_handler",
+    "EXCEPTION_HANDLER": "apps.core.exceptions.handlers.custom_exception_handler",
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
     ],

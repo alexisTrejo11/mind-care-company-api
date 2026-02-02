@@ -7,11 +7,11 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework import status
 
-from core.exceptions.base_exceptions import (
+from apps.core.exceptions.base_exceptions import (
     MindCareBaseException,
     DatabaseError as MindCareDatabaseError,
 )
-from core.responses.api_response import APIResponse
+from apps.core.responses.api_response import APIResponse
 
 logger = logging.getLogger(__name__)
 

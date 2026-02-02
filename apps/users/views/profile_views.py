@@ -1,7 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from core.decorators.error_handler import api_error_handler
-from core.responses.api_response import APIResponse
+from apps.core.decorators.error_handler import api_error_handler
+from apps.core.responses.api_response import APIResponse
 from ..services.user_service import UserService
 from ..serializers import UserProfileSerializer
 

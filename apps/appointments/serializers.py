@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from .models import Appointment
 from apps.specialists.models import Specialist
-from core.exceptions.base_exceptions import (
+from apps.core.exceptions.base_exceptions import (
     NotFoundError,
 )
 from django.core.exceptions import ValidationError
