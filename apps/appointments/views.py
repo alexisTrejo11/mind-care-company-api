@@ -10,6 +10,7 @@ from django.http import Http404
 
 
 from apps.core.decorators.error_handler import api_error_handler
+from apps.core.decorators.rate_limit import rate_limit
 from apps.core.permissions import IsPatient, IsSpecialistOrStaff
 from apps.core.responses.api_response import APIResponse
 
@@ -92,6 +93,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return AppointmentSerializer
 
     @api_error_handler
+    @rate_limit(profile="READ_OPERATION", scope="appointment_list")
     def list(self, request, *args, **kwargs):
         """List appointments with filters"""
         queryset = self.filter_queryset(self.get_queryset())
@@ -107,6 +109,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="READ_OPERATION", scope="appointment_detail")
     def retrieve(self, request, *args, **kwargs):
         """Get appointment details"""
         try:
@@ -123,6 +126,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="appointment_create")
     def create(self, request, *args, **kwargs):
         """Create new appointment"""
         serializer = self.get_serializer(
@@ -140,6 +144,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="appointment_cancel")
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
         """Cancel an appointment"""
@@ -156,6 +161,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="appointment_reschedule")
     @action(detail=True, methods=["post"], url_path="reschedule")
     def reschedule(self, request, pk=None):
         """Reschedule an appointment"""
@@ -177,6 +183,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="STANDARD", scope="appointment_stats")
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
         """Get appointment statistics"""
@@ -198,6 +205,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="STANDARD", scope="appointment_today")
     @action(detail=False, methods=["get"], url_path="today")
     def today_appointments(self, request):
         """Get today's appointments"""

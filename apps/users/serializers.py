@@ -33,7 +33,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = [
             "email",
             "password",
-            "password_confirm",
             "first_name",
             "last_name",
             "phone",
@@ -44,39 +43,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             "first_name": {"required": True},
             "last_name": {"required": True},
         }
-
-    def validate(self, attrs):
-        """Validate password confirmation matches"""
-        if attrs["password"] != attrs["password_confirm"]:
-            raise serializers.ValidationError(
-                {"password": "Password fields didn't match."}
-            )
-        return attrs
-
-    def validate_email(self, value):
-        """Validate email is unique"""
-        if User.objects.filter(email=value.lower()).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-        return value.lower()
-
-    def create(self, validated_data):
-        """Create new user with inactive status"""
-        # Remove password_confirm as it's not needed
-        validated_data.pop("password_confirm")
-
-        # Create user (inactive by default)
-        user = User.objects.create_user(
-            email=validated_data["email"],
-            password=validated_data["password"],
-            first_name=validated_data["first_name"],
-            last_name=validated_data["last_name"],
-            phone=validated_data.get("phone", ""),
-            date_of_birth=validated_data.get("date_of_birth"),
-            user_type=validated_data.get("user_type", "patient"),
-            is_active=False,  # User must activate via email
-        )
-
-        return user
 
 
 class UserLoginSerializer(serializers.Serializer):
@@ -93,24 +59,15 @@ class UserLoginSerializer(serializers.Serializer):
         password = attrs.get("password")
 
         if email and password:
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                raise serializers.ValidationError("Invalid email or password.")
-
-            if not user.is_active:
+            if len(email) > 255:
                 raise serializers.ValidationError(
-                    "Account is not activated. Please check your email for activation link."
+                    "Email length must not exceed 255 characters."
+                )
+            if len(password) > 128:
+                raise serializers.ValidationError(
+                    "Password length must not exceed 128 characters."
                 )
 
-            user = authenticate(
-                request=self.context.get("request"), username=email, password=password
-            )
-
-            if not user:
-                raise serializers.ValidationError("Invalid email or password.")
-
-            attrs["user"] = user
             return attrs
         else:
             raise serializers.ValidationError("Must include 'email' and 'password'.")
@@ -175,17 +132,6 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         validators=[validate_password],
         style={"input_type": "password"},
     )
-    password_confirm = serializers.CharField(
-        write_only=True, required=True, style={"input_type": "password"}
-    )
-
-    def validate(self, attrs):
-        """Validate passwords match"""
-        if attrs["password"] != attrs["password_confirm"]:
-            raise serializers.ValidationError(
-                {"password": "Password fields didn't match."}
-            )
-        return attrs
 
     def validate_old_password(self, value):
         """Validate old password is correct"""

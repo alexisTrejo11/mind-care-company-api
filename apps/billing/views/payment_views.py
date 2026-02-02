@@ -18,6 +18,7 @@ from apps.billing.services.billing_service import BillingService
 from apps.billing.services.stripe_service import StripeService
 from apps.core.responses.api_response import APIResponse
 from apps.core.decorators.error_handler import api_error_handler
+from apps.core.decorators.rate_limit import rate_limit
 from apps.billing.models.payment_models import PaymentMethod
 from apps.billing.serializers.payment import PaymentMethodSerializer
 
@@ -51,6 +52,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return PaymentSerializer
 
     @api_error_handler
+    @rate_limit(profile="PAYMENT", scope="payment_create")
     def create(self, request, *args, **kwargs):
         """Create payment"""
         # Check permissions
@@ -75,6 +77,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="PAYMENT", scope="payment_intent")
     @action(detail=False, methods=["post"], url_path="create-intent")
     def create_payment_intent(self, request):
         """Create Stripe Payment Intent"""
@@ -122,6 +125,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="PAYMENT", scope="payment_confirm")
     @action(
         detail=False,
         methods=["post"],

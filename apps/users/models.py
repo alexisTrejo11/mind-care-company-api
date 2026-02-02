@@ -17,6 +17,11 @@ class UserManager(BaseUserManager):
             raise ValueError("Users must have an email address")
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
+        user.is_active = (
+            False
+            if extra_fields.get("is_active") is None
+            else extra_fields.get("is_active")
+        )
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -53,7 +58,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     user_type = models.CharField(
         max_length=20, choices=USER_TYPE_CHOICES, default="patient"
     )
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

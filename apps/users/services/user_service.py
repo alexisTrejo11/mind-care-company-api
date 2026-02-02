@@ -42,13 +42,11 @@ class UserService:
         Retorna: (user, tokens)
         """
         try:
-            # Validaciones de negocio
             if User.objects.filter(email__iexact=email).exists():
                 raise ValidationError(
                     detail="Email already registered", code="email_exists"
                 )
 
-            # Crear usuario
             user = User.objects.create_user(
                 email=email.lower(),
                 password=password,
@@ -59,10 +57,8 @@ class UserService:
                 **extra_fields,
             )
 
-            # Generar token de activación
             activation_token = generate_activation_token(user)
-
-            logger.info(f"User registered: {user.email} (ID: {user.user_id})")
+            logger.info(f"User registered: {user.email} (ID: {user.id})")
 
             return user, {"activation_token": activation_token}
 
@@ -128,7 +124,7 @@ class UserService:
                     detail="Invalid or expired activation token"
                 )
 
-            user = User.objects.get(user_id=user_id)
+            user = User.objects.get(id=user_id)
 
             if user.is_active:
                 raise UserAlreadyActiveError()
@@ -166,7 +162,7 @@ class UserService:
 
         except Exception as e:
             logger.error(f"Password reset request error: {str(e)}", exc_info=True)
-            return ""
+            raise
 
     @staticmethod
     def reset_password(token: str, new_password: str) -> User:
@@ -179,7 +175,7 @@ class UserService:
             if not user_id:
                 raise InvalidResetTokenError(detail="Invalid or expired reset token")
 
-            user = User.objects.get(user_id=user_id, is_active=True)
+            user = User.objects.get(id=user_id, is_active=True)
             user.set_password(new_password)
             user.save(update_fields=["password"])
 

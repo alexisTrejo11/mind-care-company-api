@@ -24,7 +24,7 @@ class UserLoginView(APIView):
     serializer_class = UserLoginSerializer
 
     @api_error_handler
-    @rate_limit(key_type="email", rate="10/1min", scope="login")
+    @rate_limit(profile="SENSITIVE", scope="login")
     def post(self, request):
         """Autenticar usuario"""
         serializer = self.serializer_class(data=request.data)
@@ -54,6 +54,7 @@ class UserLogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     @api_error_handler
+    @rate_limit(profile="STANDARD", scope="logout")
     def post(self, request):
         """Cerrar sesión"""
         from rest_framework_simplejwt.tokens import RefreshToken

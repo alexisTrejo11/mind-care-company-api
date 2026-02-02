@@ -1,10 +1,11 @@
 from django.core.cache import cache
-from typing import Callable
+from typing import Callable, Dict, Optional, Union
 import functools
 from ..exceptions.base_exceptions import ToManyRequestsError
 import re
 import time
 import logging
+from .profiles import RateLimitProfiles
 
 logger = logging.getLogger(__name__)
 
@@ -74,33 +75,66 @@ class RateLimiter:
         return False
 
 
-def rate_limit(key_type: str, rate: str, scope: str = "default"):
+def rate_limit(
+    profile: Optional[str] = None,
+    key_type: Optional[str] = None,
+    rate: Optional[str] = None,
+    scope: str = "default",
+):
     """
     Decorator to apply rate limiting to API views.
 
+    Can be used in two ways:
+    1. With a predefined profile:
+       @rate_limit(profile="SENSITIVE", scope="login")
+
+    2. With explicit parameters (legacy):
+       @rate_limit(key_type="email", rate="5/min", scope="login")
+
     Args:
-        key_type: What to track ('ip', 'user_id', or 'email').
-        rate: Rate string (e.g., '5/min', '100/day').
+        profile: Name of predefined rate limit profile (e.g., 'SENSITIVE', 'STANDARD').
+        key_type: What to track ('ip', 'user_id', or 'email'). Required if not using profile.
+        rate: Rate string (e.g., '5/min', '100/day'). Required if not using profile.
         scope: Unique string for the specific action (e.g., 'login', 'create_appointment').
+
+    Raises:
+        ValueError: If neither profile nor (key_type and rate) are provided.
     """
 
     def decorator(view_func: Callable) -> Callable:
         @functools.wraps(view_func)
         def wrapper(self, request, *args, **kwargs):
+            # Resolve rate limit configuration
+            if profile:
+                try:
+                    config = RateLimitProfiles.get_profile(profile)
+                    resolved_key_type = config["key_type"]
+                    resolved_rate = config["rate"]
+                except ValueError as e:
+                    logger.error(f"Invalid rate limit profile: {e}")
+                    raise
+            elif key_type and rate:
+                resolved_key_type = key_type
+                resolved_rate = rate
+            else:
+                raise ValueError(
+                    "Either 'profile' or both 'key_type' and 'rate' must be provided"
+                )
+
             identifier = None
 
             # 1. Resolve Identifier
-            if key_type == "user_id":
+            if resolved_key_type == "user_id":
                 if request.user and request.user.is_authenticated:
                     identifier = str(request.user.id)
-            elif key_type == "ip":
+            elif resolved_key_type == "ip":
                 x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
                 identifier = (
                     x_forwarded_for.split(",")[0]
                     if x_forwarded_for
                     else request.META.get("REMOTE_ADDR")
                 )
-            elif key_type == "email":
+            elif resolved_key_type == "email":
                 identifier = request.data.get("email") or request.query_params.get(
                     "email"
                 )
@@ -110,10 +144,10 @@ def rate_limit(key_type: str, rate: str, scope: str = "default"):
                 identifier = request.META.get("REMOTE_ADDR", "unknown")
 
             # 2. Check Limit
-            if RateLimiter.is_limited(identifier, rate, scope):
+            if RateLimiter.is_limited(identifier, resolved_rate, scope):
                 logger.warning(f"Rate limit hit for {identifier} on scope {scope}")
                 raise RateLimitError(
-                    detail=f"Too many requests. Limit is {rate} per {scope}."
+                    detail=f"Too many requests. Limit is {resolved_rate} per {scope}."
                 )
 
             return view_func(self, request, *args, **kwargs)

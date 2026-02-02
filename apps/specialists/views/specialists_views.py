@@ -8,6 +8,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import PermissionDenied
 
 from apps.core.decorators.error_handler import api_error_handler
+from apps.core.decorators.rate_limit import rate_limit
 from apps.core.exceptions.base_exceptions import (
     NotFoundError,
     PrivacyError,
@@ -142,6 +143,7 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         return SpecialistSerializer
 
     @api_error_handler
+    @rate_limit(profile="PUBLIC", scope="specialist_list")
     def list(self, request, *args, **kwargs):
         """List specialists with search and filters"""
         # Validate search parameters
@@ -164,6 +166,7 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="PUBLIC", scope="specialist_detail")
     def retrieve(self, request, *args, **kwargs):
         """Get specialist details"""
         try:
@@ -182,6 +185,7 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         return APIResponse.success(message="Specialist details retrieved", data=data)
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="specialist_create")
     def create(self, request, *args, **kwargs):
         """Create new specialist profile"""
         serializer = self.get_serializer(data=request.data)
@@ -197,6 +201,7 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="specialist_update")
     def update(self, request, *args, **kwargs):
         """Update specialist profile"""
         instance = self.get_object()
@@ -222,6 +227,7 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="ADMIN", scope="specialist_delete")
     def destroy(self, request, *args, **kwargs):
         """Delete specialist profile"""
         try:
@@ -243,6 +249,7 @@ class SpecialistViewSet(viewsets.ModelViewSet):
         return APIResponse.success(message="Specialist profile deleted successfully")
 
     @api_error_handler
+    @rate_limit(profile="PUBLIC", scope="specialist_services")
     @action(detail=True, methods=["get"], url_path="services")
     def specialist_services(self, request, pk=None):
         """Get services offered by specialist"""

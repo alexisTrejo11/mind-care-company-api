@@ -19,7 +19,7 @@ class UserRegistrationView(APIView):
     serializer_class = UserRegistrationSerializer
 
     @api_error_handler
-    @rate_limit(key_type="ip", rate="5/hour", scope="registration")
+    @rate_limit(profile="RESTRICTED", scope="registration")
     def post(self, request):
         """Registrar nuevo usuario"""
         serializer = self.serializer_class(data=request.data)

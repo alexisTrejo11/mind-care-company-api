@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.core.decorators.error_handler import api_error_handler
+from apps.core.decorators.rate_limit import rate_limit
 from apps.core.responses.api_response import APIResponse
 from .models import MedicalRecord
 from .serializers import (
@@ -85,6 +86,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         return MedicalRecordSerializer
 
     @api_error_handler
+    @rate_limit(profile="READ_OPERATION", scope="medical_record_list")
     def list(self, request, *args, **kwargs):
         """List medical records with advanced filtering"""
         filter_serializer = MedicalRecordFilterSerializer(data=request.query_params)
@@ -108,6 +110,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="READ_OPERATION", scope="medical_record_detail")
     def retrieve(self, request, *args, **kwargs):
         """Get medical record details"""
         instance = self.get_object()
@@ -130,6 +133,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="medical_record_create")
     def create(self, request, *args, **kwargs):
         """Create new medical record"""
         serializer = self.get_serializer(data=request.data)
@@ -146,6 +150,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="medical_record_update")
     def update(self, request, *args, **kwargs):
         """Update medical record"""
         instance = self.get_object()
@@ -163,6 +168,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="medical_record_delete")
     def destroy(self, request, *args, **kwargs):
         """Delete medical record"""
         instance = self.get_object()
@@ -174,6 +180,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         return APIResponse.success(message="Medical record deleted successfully")
 
     @api_error_handler
+    @rate_limit(profile="STANDARD", scope="patient_records")
     @action(detail=False, methods=["get"], url_path="patient-records")
     def patient_records(self, request):
         """Get medical records for current patient"""
@@ -193,6 +200,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="STANDARD", scope="upcoming_follow_ups")
     @action(detail=False, methods=["get"], url_path="upcoming-follow-ups")
     def upcoming_follow_ups(self, request):
         """Get upcoming follow-ups"""
@@ -241,6 +249,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="STANDARD", scope="medical_stats")
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
         """Get medical record statistics"""

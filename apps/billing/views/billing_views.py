@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from django.db.models import Q
 
 from core.decorators.error_handler import api_error_handler
+from core.decorators.rate_limit import rate_limit
 from core.responses.api_response import APIResponse
 from ..models import Bill, Payment, Refund, InsuranceClaim, PaymentMethod
 from ..serializers import (
@@ -121,6 +122,7 @@ class BillViewSet(viewsets.ModelViewSet):
         return BillSerializer
 
     @api_error_handler
+    @rate_limit(profile="READ_OPERATION", scope="bill_list")
     def list(self, request, *args, **kwargs):
         """List bills with advanced filtering"""
         filter_serializer = BillFilterSerializer(data=request.query_params)
@@ -139,6 +141,7 @@ class BillViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="READ_OPERATION", scope="bill_detail")
     def retrieve(self, request, *args, **kwargs):
         """Get bill details"""
         try:
@@ -156,6 +159,7 @@ class BillViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="bill_create")
     def create(self, request, *args, **kwargs):
         """Create new bill"""
         # Check permissions
@@ -178,6 +182,7 @@ class BillViewSet(viewsets.ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="bill_update")
     def update(self, request, *args, **kwargs):
         """Update bill"""
         instance = self.get_object()

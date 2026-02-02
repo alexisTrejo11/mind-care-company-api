@@ -26,7 +26,7 @@ class PasswordResetRequestView(APIView):
     serializer_class = PasswordResetRequestSerializer
 
     @api_error_handler
-    @rate_limit(key_type="email", rate="3/hour", scope="password_reset")
+    @rate_limit(profile="SENSITIVE", scope="password_reset")
     def post(self, request):
         """Solicitar reseteo de contraseña"""
         serializer = self.serializer_class(data=request.data)
@@ -60,6 +60,7 @@ class PasswordResetConfirmView(APIView):
     serializer_class = PasswordResetConfirmSerializer
 
     @api_error_handler
+    @rate_limit(profile="RESTRICTED", scope="password_reset_confirm")
     def post(self, request):
         """Confirmar reseteo de contraseña"""
         serializer = self.serializer_class(data=request.data)
@@ -93,6 +94,7 @@ class PasswordChangeView(APIView):
     serializer_class = PasswordChangeSerializer
 
     @api_error_handler
+    @rate_limit(profile="STANDARD", scope="password_change")
     def post(self, request):
         """Cambiar contraseña"""
         serializer = self.serializer_class(data=request.data)
