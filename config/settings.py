@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.medical",
     "apps.billing",
     "apps.notification",
+    "apps.core",
 ]
 
 AUTH_USER_MODEL = "users.User"
