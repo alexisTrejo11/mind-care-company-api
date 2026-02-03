@@ -53,7 +53,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(max_length=255, unique=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    phone = models.CharField(max_length=50, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     user_type = models.CharField(
         max_length=20, choices=USER_TYPE_CHOICES, default="patient"
