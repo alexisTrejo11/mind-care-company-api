@@ -1,14 +1,48 @@
+# Environment files - NEVER commit these
 .env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# Python
 env/
-*__pycache__/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 *.pyc
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+*.log
+logs/
+staticfiles/
+media/
+config/settings.py.backup
+
+# IDEs
 .DS_Store
 .vscode/
 .idea/
-node_modules/
-dist/
-db.sqlite3
-*.log
+*.swp
+*.swo
+*~
 
-*__pycache__/
-*.pyc
+# Node
+node_modules/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# OS
+Thumbs.db

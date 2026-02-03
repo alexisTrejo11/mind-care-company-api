@@ -41,7 +41,7 @@ RUN chmod +x /app/scripts/entrypoint.sh 2>/dev/null || true \
 
 
 ENV PYTHONUNBUFFERED=1 \
-   DJANGO_SETTINGS_MODULE=config.settings \
+   DJANGO_SETTINGS_MODULE=config.settings.production \
    PORT=8000
 
 USER django

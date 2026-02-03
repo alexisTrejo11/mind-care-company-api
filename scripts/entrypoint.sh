@@ -2,6 +2,7 @@
 
 set -e
 
+# TODO: Fix ENV does not load from .env file issue
 # Wait until PostgreSQL is ready
 echo "Waiting for PostgreSQL to be ready..."
 while ! nc -z ${POSTGRES_HOST:-db} ${POSTGRES_PORT:-5432}; do

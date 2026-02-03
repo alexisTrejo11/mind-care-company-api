@@ -1,8 +1,0 @@
--- Remove Business Logic in serializers --
--- Rate limiting for sensitive endpoints --
--- Add Dockerfile for deployment --
--- Tests all -- 
--- Notification system integration with celery. Notification Factory??? --
--- Integrate Stripe for payments --
--- Create Read.Me --
--- Deploy --
