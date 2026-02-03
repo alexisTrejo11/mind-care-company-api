@@ -67,5 +67,8 @@ class Appointment(models.Model):
             models.Index(fields=["patient", "status"]),
         ]
 
+    def is_from_specialist(self, specialist):
+        return self.specialist == specialist
+
     def __str__(self):
         return f"{self.patient.get_full_name()} with {self.specialist.user.get_full_name()} on {self.appointment_date}"

@@ -20,7 +20,7 @@ class EmailActivationView(APIView):
     @api_error_handler
     @rate_limit(profile="RESTRICTED", scope="email_activation")
     def post(self, request):
-        """Activar usuario"""
+        """Activate user account via email token"""
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 

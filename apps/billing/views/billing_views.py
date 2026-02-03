@@ -1,29 +1,21 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from django.db.models import Q
 
+from apps.core.permissions import IsAdminOrStaff, IsSpecialist
 from core.decorators.error_handler import api_error_handler
 from core.decorators.rate_limit import rate_limit
 from core.responses.api_response import APIResponse
-from ..models import Bill, Payment, Refund, InsuranceClaim, PaymentMethod
+from ..models import Bill
 from ..serializers import (
     BillSerializer,
     BillCreateSerializer,
     BillUpdateSerializer,
     BillFilterSerializer,
-    PaymentSerializer,
-    PaymentCreateSerializer,
-    CreatePaymentIntentSerializer,
-    RefundSerializer,
-    InsuranceClaimSerializer,
-    PaymentMethodSerializer,
     BillingStatsSerializer,
 )
 from ..services import BillingService, StripeService, InvoiceService
@@ -63,7 +55,20 @@ class BillViewSet(viewsets.ModelViewSet):
         "created_at",
     ]
     ordering = ["-invoice_date"]
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """Assign permissions based on action"""
+        if self.action in ["create"]:
+            return [IsAdminOrStaff, IsSpecialist]
+        elif self.action in [
+            "update",
+            "partial_update",
+            "send_invoice",
+            "send_reminder",
+        ]:
+            return [IsAdminOrStaff]
+        else:
+            return [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -143,15 +148,8 @@ class BillViewSet(viewsets.ModelViewSet):
     @api_error_handler
     @rate_limit(profile="READ_OPERATION", scope="bill_detail")
     def retrieve(self, request, *args, **kwargs):
-        """Get bill details"""
-        try:
-            instance = self.get_object()
-
-        except Bill.DoesNotExist:
-            raise NotFoundError("Bill not found")
-
-        if not BillingService.can_view_bill(request.user, instance):
-            raise PermissionDenied("You do not have permission to view this bill")
+        """Get bill details. If patient, only will see their own bills."""
+        instance = self.get_object()
 
         serializer = self.get_serializer(instance)
         return APIResponse.success(
@@ -187,10 +185,6 @@ class BillViewSet(viewsets.ModelViewSet):
         """Update bill"""
         instance = self.get_object()
 
-        # Check permissions
-        if not BillingService.can_update_bill(request.user, instance):
-            raise PermissionDenied("You do not have permission to update this bill")
-
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
@@ -207,8 +201,8 @@ class BillViewSet(viewsets.ModelViewSet):
         """Generate invoice PDF"""
         instance = self.get_object()
 
-        if not BillingService.can_view_bill(request.user, instance):
-            raise PermissionDenied("You do not have permission to access this invoice")
+        user = request.user
+        assert_specialist_in_appointment(user, instance.appointment)
 
         pdf_content = InvoiceService.generate_invoice_pdf(instance)
 
@@ -225,11 +219,10 @@ class BillViewSet(viewsets.ModelViewSet):
         """Send invoice email to patient"""
         instance = self.get_object()
 
-        if not BillingService.can_update_bill(request.user, instance):
-            raise PermissionDenied("You do not have permission to send invoices")
+        user = request.user
+        assert_specialist_in_appointment(user, instance.appointment)
 
         result = InvoiceService.send_invoice_email(instance)
-
         return APIResponse.success(message="Invoice sent successfully", data=result)
 
     @api_error_handler
@@ -337,3 +330,12 @@ class BillingStatsViewSet(viewsets.ViewSet):
         )
 
         return APIResponse.success(message="Billing statistics retrieved", data=stats)
+
+
+def assert_specialist_in_appointment(user, appointment):
+    """Check if the user is the specialist for the given appointment"""
+
+    user = user
+    if user.is_specialist():
+        if not appointment.is_from_specialist(user.specialist_profile):
+            raise PermissionDenied("You do not have permission to send this invoice")

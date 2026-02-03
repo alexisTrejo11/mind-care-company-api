@@ -1,7 +1,6 @@
 import logging
-from typing import Optional, Dict, Any, Tuple
+from typing import Dict, Any, Tuple
 from django.utils import timezone
-from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from ..models import User
@@ -29,18 +28,23 @@ class UserService:
 
     @staticmethod
     def register_user(
-        email: str,
-        password: str,
-        first_name: str,
-        last_name: str,
-        phone: Optional[str] = None,
-        user_type: str = "patient",
-        **extra_fields,
+        **kwargs,
     ) -> Tuple[User, Dict[str, Any]]:
         """
         Registrar nuevo usuario
         Retorna: (user, tokens)
         """
+        email = kwargs["email"]
+        password = kwargs["password"]
+        first_name = kwargs["first_name"]
+        last_name = kwargs["last_name"]
+        phone = kwargs.get("phone")
+        user_type = kwargs.get("user_type", "patient")
+        date_of_birth = kwargs.get("date_of_birth")
+
+        extra_fields = {
+            "date_of_birth": date_of_birth,
+        }
         try:
             if User.objects.filter(email__iexact=email).exists():
                 raise ValidationError(

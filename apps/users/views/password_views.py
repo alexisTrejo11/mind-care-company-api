@@ -34,10 +34,8 @@ class PasswordResetRequestView(APIView):
 
         email = serializer.validated_data["email"]
 
-        # Llamar al servicio
         reset_token = UserService.request_password_reset(email)
 
-        # Solo enviar email si hay token (usuario existe)
         if reset_token:
             send_password_reset_email.delay(
                 user_email=email,
@@ -69,10 +67,8 @@ class PasswordResetConfirmView(APIView):
         token = serializer.validated_data["token"]
         new_password = serializer.validated_data["password"]
 
-        # Llamar al servicio
         user = UserService.reset_password(token, new_password)
 
-        # Enviar notificación
         send_password_changed_notification.delay(
             user_email=user.email,
             user_name=user.get_full_name(),
@@ -96,7 +92,7 @@ class PasswordChangeView(APIView):
     @api_error_handler
     @rate_limit(profile="STANDARD", scope="password_change")
     def post(self, request):
-        """Cambiar contraseña"""
+        """Change password. Requires current password."""
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 

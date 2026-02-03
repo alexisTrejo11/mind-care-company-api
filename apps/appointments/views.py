@@ -76,9 +76,9 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         user = self.request.user
 
-        if user.user_type == "patient":
+        if user.is_patient():
             queryset = queryset.filter(patient=user)
-        elif user.user_type == "specialist":
+        elif user.is_specialist():
             if hasattr(user, "specialist_profile"):
                 queryset = queryset.filter(specialist=user.specialist_profile)
 
@@ -112,14 +112,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     @rate_limit(profile="READ_OPERATION", scope="appointment_detail")
     def retrieve(self, request, *args, **kwargs):
         """Get appointment details"""
-        try:
-            instance = self.get_object()
-        except Http404:
-            return APIResponse.error(
-                message="Appointment not found",
-                code="not_found",
-                status_code=404,
-            )
+        instance = self.get_object()
+
         serializer = self.get_serializer(instance)
         return APIResponse.success(
             message="Appointment details retrieved", data=serializer.data
@@ -172,7 +166,6 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
 
-        # Use service to reschedule
         appointment = AppointmentService.reschedule_appointment(
             appointment=appointment, **serializer.validated_data
         )
@@ -191,7 +184,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         stats_serializer.is_valid(raise_exception=True)
 
         specialist_id = None
-        if request.user.user_type == "specialist":
+        if request.user.is_specialist():
             if hasattr(request.user, "specialist_profile"):
                 specialist_id = request.user.specialist_profile.id
 

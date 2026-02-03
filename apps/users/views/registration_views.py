@@ -21,25 +21,13 @@ class UserRegistrationView(APIView):
     @api_error_handler
     @rate_limit(profile="RESTRICTED", scope="registration")
     def post(self, request):
-        """Registrar nuevo usuario"""
+        """Register a new user account. Will send activation email."""
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Extraer datos validados
-        data = serializer.validated_data
+        user, tokens = UserService.register_user(**serializer.validated_data)
 
-        # Llamar al servicio de negocio
-        user, tokens = UserService.register_user(
-            email=data["email"],
-            password=data["password"],
-            first_name=data["first_name"],
-            last_name=data["last_name"],
-            phone=data.get("phone"),
-            user_type=data.get("user_type", "patient"),
-            date_of_birth=data.get("date_of_birth"),
-        )
-
-        # Enviar email de bienvenida (asíncrono)
+        # Async Task
         send_welcome_email.delay(
             user_id=str(user.pk),
             user_email=user.email,

@@ -20,9 +20,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         validators=[validate_password],
         style={"input_type": "password"},
     )
-    password_confirm = serializers.CharField(
-        write_only=True, required=True, style={"input_type": "password"}
-    )
     user_type = serializers.ChoiceField(
         choices=[("patient", "Patient"), ("specialist", "Specialist")],
         default="patient",
@@ -153,9 +150,6 @@ class PasswordChangeSerializer(serializers.Serializer):
         validators=[validate_password],
         style={"input_type": "password"},
     )
-    new_password_confirm = serializers.CharField(
-        required=True, write_only=True, style={"input_type": "password"}
-    )
 
     def validate_old_password(self, value):
         """Validate old password is correct"""
@@ -166,10 +160,6 @@ class PasswordChangeSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         """Validate new passwords match"""
-        if attrs["new_password"] != attrs["new_password_confirm"]:
-            raise serializers.ValidationError(
-                {"new_password": "Password fields didn't match."}
-            )
         return attrs
 
 

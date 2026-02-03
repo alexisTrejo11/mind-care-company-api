@@ -1,7 +1,7 @@
 from datetime import timedelta
-from rest_framework import viewsets
+from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
@@ -21,14 +21,14 @@ from .serializers import (
     MedicalRecordAuditSerializer,
 )
 from .services import MedicalRecordService
+from apps.core.permissions import IsAdminOrStaff, IsPatient
 
 
-class MedicalRecordViewSet(viewsets.ModelViewSet):
+class MedicalRecordViewSet(ModelViewSet):
     """
     Unified ViewSet to handle all medical record operations
     """
 
-    permission_classes = [IsAuthenticated]
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -60,22 +60,26 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
             "patient", "specialist", "specialist__user", "appointment"
         )
 
-        # Apply access control based on user type
-        if user.user_type == "patient":
+        if user.is_patient():
             queryset = queryset.filter(patient=user)
-            # Patients can't see highly sensitive records
             queryset = queryset.exclude(confidentiality_level="highly_sensitive")
-
-        elif user.user_type == "specialist":
+        elif user.is_specialist():
             if hasattr(user, "specialist_profile"):
                 queryset = queryset.filter(specialist=user.specialist_profile)
-
-        elif user.user_type == "staff":
+        elif user.is_staff:
             queryset = queryset.filter(confidentiality_level="standard")
 
         # Admin can see everything (no filter)
 
         return queryset
+
+    def get_permissions(self):
+        if self.action in ["change_confidentiality", "audit_log"]:
+            return [IsAdminOrStaff()]
+        elif self.action in ["patient_records", "update", "partial_update", "destroy"]:
+            return [IsPatient()]
+        else:
+            return [IsAuthenticated()]
 
     def get_serializer_class(self):
         """Return the appropriate serializer based on the action"""
@@ -114,10 +118,6 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         """Get medical record details"""
         instance = self.get_object()
 
-        # Check access with business logic
-        if not MedicalRecordService.can_access_record(request.user, instance):
-            raise PrivacyError("You do not have permission to view this record")
-
         serializer = self.get_serializer(instance)
 
         # Add permission flags
@@ -138,7 +138,6 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Use service for business logic
         medical_record = MedicalRecordService.create_medical_record(
             user=request.user, **serializer.validated_data
         )
@@ -183,9 +182,6 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="patient-records")
     def patient_records(self, request):
         """Get medical records for current patient"""
-        if request.user.user_type != "patient":
-            raise PrivacyError("Only patients can access their own records")
-
         queryset = self.get_queryset()
         page = self.paginate_queryset(queryset)
 
@@ -270,22 +266,16 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         """Change confidentiality level (admin only)"""
         instance = self.get_object()
 
-        # Check permissions
-        if request.user.user_type != "admin":
-            raise PrivacyError("Only admins can change confidentiality level")
-
         new_level = request.data.get("confidentiality_level")
         if not new_level or new_level not in dict(
             MedicalRecord.CONFIDENTIALITY_CHOICES
         ):
             raise ValidationError(detail="Invalid confidentiality level")
 
-        # Validate with business logic
         new_level = MedicalRecordService.validate_confidentiality_level(
             new_level, instance.diagnosis
         )
 
-        # Update
         instance.confidentiality_level = new_level
         instance.save()
 

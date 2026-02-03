@@ -18,24 +18,24 @@ class UserProfileView(APIView):
     @api_error_handler
     @rate_limit(profile="READ_OPERATION", scope="profile_get")
     def get(self, request):
-        """Obtener perfil"""
+        """Get profile of logged-in user"""
         serializer = UserProfileSerializer(request.user)
         return APIResponse.success(data=serializer.data)
 
     @api_error_handler
     @rate_limit(profile="WRITE_OPERATION", scope="profile_update")
     def put(self, request):
-        """Actualizar perfil completo"""
+        """Update full profile of logged-in user"""
         return self._update_profile(request, partial=False)
 
     @api_error_handler
     @rate_limit(profile="WRITE_OPERATION", scope="profile_patch")
     def patch(self, request):
-        """Actualizar perfil parcial"""
+        """Update partial profile of logged-in user"""
         return self._update_profile(request, partial=True)
 
     def _update_profile(self, request, partial=False):
-        """Lógica compartida para actualizar perfil"""
+        """Shared logic for updating profile"""
         serializer = UserProfileSerializer(
             request.user, data=request.data, partial=partial
         )

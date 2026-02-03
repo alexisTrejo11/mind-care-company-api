@@ -77,6 +77,18 @@ class User(AbstractBaseUser, PermissionsMixin):
             models.Index(fields=["email"]),
         ]
 
+    def is_patient(self) -> bool:
+        return self.user_type == "patient"
+
+    def is_specialist(self) -> bool:
+        return self.user_type == "specialist"
+
+    def is_admin(self) -> bool:
+        return self.user_type == "admin"
+
+    def is_admin_or_staff(self) -> bool:
+        return self.is_admin() or self.is_staff
+
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"
 

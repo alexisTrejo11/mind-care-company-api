@@ -26,14 +26,13 @@ class UserLoginView(APIView):
     @api_error_handler
     @rate_limit(profile="SENSITIVE", scope="login")
     def post(self, request):
-        """Autenticar usuario"""
+        """Authenticate user and return JWT tokens"""
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
 
-        # Llamar al servicio
         user, tokens = UserService.authenticate_user(email, password)
 
         return APIResponse.success(
@@ -56,7 +55,7 @@ class UserLogoutView(APIView):
     @api_error_handler
     @rate_limit(profile="STANDARD", scope="logout")
     def post(self, request):
-        """Cerrar sesión"""
+        """Logout user and blacklist refresh token"""
         from rest_framework_simplejwt.tokens import RefreshToken
 
         refresh_token = request.data.get("refresh_token")
@@ -81,7 +80,7 @@ class RefreshTokenView(APIView):
     @api_error_handler
     @rate_limit(profile="SENSITIVE", scope="token_refresh")
     def post(self, request):
-        """Refrescar token de acceso"""
+        """Refresh JWT access token using refresh token"""
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
 
