@@ -10,10 +10,6 @@ from ..serializers import (
     PasswordResetConfirmSerializer,
     PasswordChangeSerializer,
 )
-from ..tasks import (
-    send_password_reset_email,
-    send_password_changed_notification,
-)
 
 
 class PasswordResetRequestView(APIView):
@@ -36,11 +32,13 @@ class PasswordResetRequestView(APIView):
 
         reset_token = UserService.request_password_reset(email)
 
+        """
         if reset_token:
             send_password_reset_email.delay(
                 user_email=email,
                 reset_token=reset_token,
             )
+        """
 
         return APIResponse.success(
             message=f"If an account exists with {mask_email(email)}, "
@@ -69,10 +67,12 @@ class PasswordResetConfirmView(APIView):
 
         user = UserService.reset_password(token, new_password)
 
+        """
         send_password_changed_notification.delay(
             user_email=user.email,
             user_name=user.get_full_name(),
         )
+        """
 
         return APIResponse.success(
             message="Password has been reset successfully. "
@@ -101,10 +101,12 @@ class PasswordChangeView(APIView):
 
         UserService.change_password(request.user, current_password, new_password)
 
+        """
         send_password_changed_notification.delay(
             user_email=request.user.email,
             user_name=request.user.get_full_name(),
         )
+        """
 
         return APIResponse.success(
             message="Password changed successfully. "

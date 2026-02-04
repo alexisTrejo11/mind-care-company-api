@@ -1,0 +1,75 @@
+{% extends "notifications/emails/base.html" %} {% block content %}
+<h2>{{ title }}</h2>
+
+<p>Hola {{ user.get_full_name }},</p>
+
+<div class="message-box">
+  <p>{{ message }}</p>
+</div>
+
+{% if activation_url %}
+<p>Para activar tu cuenta, haz clic en el siguiente botón:</p>
+<center>
+  <a href="{{ activation_url }}" class="button">Activar mi cuenta</a>
+</center>
+<p style="font-size: 14px; color: #718096; margin-top: 20px">
+  Si el botón no funciona, copia y pega este enlace en tu navegador:<br />
+  <a href="{{ activation_url }}" style="color: #667eea">{{ activation_url }}</a>
+</p>
+{% endif %} {% if reset_url %}
+<p>Has solicitado restablecer tu contraseña. Haz clic en el siguiente botón:</p>
+<center>
+  <a href="{{ reset_url }}" class="button">Restablecer contraseña</a>
+</center>
+<p style="font-size: 14px; color: #718096; margin-top: 20px">
+  Este enlace expirará en 24 horas.<br />
+  Si no solicitaste este cambio, ignora este correo.
+</p>
+<p style="font-size: 14px; color: #718096">
+  Enlace directo:
+  <a href="{{ reset_url }}" style="color: #667eea">{{ reset_url }}</a>
+</p>
+{% endif %} {% if verification_code %}
+<div class="info-section">
+  <h3>Código de verificación</h3>
+  <div
+    style="
+      text-align: center;
+      font-size: 32px;
+      font-weight: 700;
+      color: #667eea;
+      letter-spacing: 5px;
+      padding: 20px;
+    "
+  >
+    {{ verification_code }}
+  </div>
+  <p
+    style="
+      text-align: center;
+      font-size: 14px;
+      color: #718096;
+      margin-top: 10px;
+    "
+  >
+    Este código expirará en 10 minutos
+  </p>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<p style="font-size: 14px; color: #718096">
+  <strong>Medidas de seguridad:</strong><br />
+  • Nunca compartas tus credenciales con nadie<br />
+  • MindCare Hub nunca te pedirá tu contraseña por correo<br />
+  • Si no realizaste esta acción, contacta a soporte inmediatamente
+</p>
+
+<p>
+  Si tienes alguna pregunta, no dudes en contactarnos en
+  <a href="mailto:{{ site_name|lower }}@support.com" style="color: #667eea"
+    >soporte@mindcarehub.com</a
+  >
+</p>
+{% endblock %}

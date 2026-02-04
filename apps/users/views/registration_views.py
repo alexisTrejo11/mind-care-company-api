@@ -5,8 +5,7 @@ from apps.core.decorators.rate_limit import rate_limit
 from apps.core.responses.api_response import APIResponse
 from ..services.user_service import UserService
 from ..serializers import UserRegistrationSerializer
-
-from ..tasks import send_welcome_email
+from apps.notification.tasks import send_notification
 
 
 class UserRegistrationView(APIView):
@@ -27,13 +26,7 @@ class UserRegistrationView(APIView):
 
         user, tokens = UserService.register_user(**serializer.validated_data)
 
-        # Async Task
-        send_welcome_email.delay(
-            user_id=str(user.pk),
-            user_email=user.email,
-            user_name=user.get_full_name(),
-            activation_token=tokens["activation_token"],
-        )
+        self._send_activation_email(user, tokens["activation_token"])
 
         return APIResponse.created(
             message="Registration successful! Please check your email to activate your account.",
@@ -42,4 +35,19 @@ class UserRegistrationView(APIView):
                 "user_id": user.pk,
                 "user_type": user.user_type,
             },
+        )
+
+    def _send_activation_email(self, user, activation_token):
+        """Send activation email to the newly registered user."""
+        send_notification.delay(
+            template_name="auth_notification",
+            user_id=str(user.pk),
+            context={
+                "user_name": user.get_full_name(),
+                "activation_token": activation_token,
+                "email": user.email,
+            },
+            category="auth",
+            priority="high",
+            immediate=True,
         )

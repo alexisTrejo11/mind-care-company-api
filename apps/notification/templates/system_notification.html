@@ -1,0 +1,178 @@
+{% extends "notifications/emails/base.html" %} {% block content %}
+<h2>{{ title }}</h2>
+
+<p>Hola {{ user.get_full_name }},</p>
+
+<div class="message-box">
+  <p>{{ message }}</p>
+</div>
+
+{% if notification_type == 'welcome' %}
+<div style="text-align: center; margin: 30px 0">
+  <div style="font-size: 60px; margin-bottom: 20px">🎉</div>
+  <h3 style="color: #2d3748; margin-bottom: 15px">
+    ¡Bienvenido a MindCare Hub!
+  </h3>
+  <p style="color: #4a5568">
+    Estamos emocionados de tenerte con nosotros. Tu bienestar mental es nuestra
+    prioridad.
+  </p>
+</div>
+
+<div class="info-section">
+  <h3>🚀 Primeros pasos</h3>
+  <ol style="color: #4a5568; margin-left: 20px; line-height: 2">
+    <li>Completa tu perfil médico</li>
+    <li>Agenda tu primera cita</li>
+    <li>Explora nuestros recursos de salud mental</li>
+    <li>Configura tus preferencias de notificaciones</li>
+  </ol>
+</div>
+
+{% if dashboard_url %}
+<center>
+  <a href="{{ dashboard_url }}" class="button">Ir a mi dashboard</a>
+</center>
+{% endif %} {% endif %} {% if notification_type == 'account_update' %}
+<div
+  style="
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #1565c0; margin-bottom: 10px">
+    ℹ️ Actualización de cuenta
+  </h3>
+  <p style="margin: 0; color: #0d47a1">
+    Tu cuenta ha sido actualizada exitosamente.
+  </p>
+</div>
+
+{% if changes %}
+<div class="info-section">
+  <h3>Cambios realizados:</h3>
+  <ul style="color: #4a5568; margin-left: 20px; line-height: 2">
+    {% for change in changes %}
+    <li>{{ change }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %} {% endif %} {% if notification_type == 'security_alert' %}
+<div
+  style="
+    background-color: #fff5f5;
+    border-left: 4px solid #e53e3e;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #c53030; margin-bottom: 10px">🔒 Alerta de seguridad</h3>
+  <p style="margin: 0; color: #742a2a">
+    Detectamos actividad inusual en tu cuenta.
+  </p>
+</div>
+
+<div class="info-section">
+  <h3>Detalles del evento:</h3>
+
+  {% if device %}
+  <div class="info-item">
+    <span class="info-label">Dispositivo:</span>
+    <span class="info-value">{{ device }}</span>
+  </div>
+  {% endif %} {% if location %}
+  <div class="info-item">
+    <span class="info-label">Ubicación:</span>
+    <span class="info-value">{{ location }}</span>
+  </div>
+  {% endif %} {% if timestamp %}
+  <div class="info-item">
+    <span class="info-label">Fecha y hora:</span>
+    <span class="info-value">{{ timestamp|date:"d/m/Y H:i" }}</span>
+  </div>
+  {% endif %}
+</div>
+
+<p style="font-weight: 600; color: #c53030">
+  Si no fuiste tú, cambia tu contraseña inmediatamente y contacta a nuestro
+  equipo de soporte.
+</p>
+
+{% if secure_account_url %}
+<center>
+  <a
+    href="{{ secure_account_url }}"
+    class="button"
+    style="background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%)"
+  >
+    Asegurar mi cuenta
+  </a>
+</center>
+{% endif %} {% endif %} {% if notification_type == 'maintenance' %}
+<div
+  style="
+    background-color: #fef5e7;
+    border-left: 4px solid #f39c12;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #7d6608; margin-bottom: 10px">
+    🔧 Mantenimiento programado
+  </h3>
+  <p style="margin: 0; color: #7d6608">
+    Realizaremos mantenimiento a la plataforma.
+  </p>
+</div>
+
+{% if maintenance_start and maintenance_end %}
+<div class="info-section">
+  <h3>Detalles del mantenimiento:</h3>
+
+  <div class="info-item">
+    <span class="info-label">Inicio:</span>
+    <span class="info-value">{{ maintenance_start|date:"d/m/Y H:i" }}</span>
+  </div>
+
+  <div class="info-item">
+    <span class="info-label">Fin estimado:</span>
+    <span class="info-value">{{ maintenance_end|date:"d/m/Y H:i" }}</span>
+  </div>
+
+  <div class="info-item">
+    <span class="info-label">Duración:</span>
+    <span class="info-value">{{ duration }}</span>
+  </div>
+</div>
+
+<p style="color: #4a5568">
+  Durante este período, algunas funciones podrían no estar disponibles.
+  Trabajaremos lo más rápido posible para minimizar las interrupciones.
+</p>
+{% endif %} {% endif %} {% if action_url %}
+<center>
+  <a href="{{ action_url }}" class="button"
+    >{{ action_text|default:"Ver más" }}</a
+  >
+</center>
+{% endif %}
+
+<div class="divider"></div>
+
+<p style="font-size: 14px; color: #718096">
+  Si tienes alguna pregunta o inquietud, nuestro equipo de soporte está
+  disponible 24/7.
+</p>
+
+<p>
+  Contáctanos en
+  <a href="mailto:soporte@mindcarehub.com" style="color: #667eea"
+    >soporte@mindcarehub.com</a
+  >
+</p>
+{% endblock %}

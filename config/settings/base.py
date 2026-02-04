@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "django_filters",
     "corsheaders",
+    "drf_spectacular",
     # Local apps
     "apps.users",
     "apps.specialists",
@@ -148,6 +149,7 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # CORS Configuration
@@ -261,4 +263,48 @@ SIMPLE_JWT = {
     ),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
+}
+
+
+# Email
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_USE_TLS = False
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@mindcarehub.com")
+
+# Get these from https://console.twilio.com/
+TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID", default="your_account_sid_here")
+TWILIO_AUTH_TOKEN = env(
+    "TWILIO_AUTH_TOKEN", default="your_auth_token_here"
+)  # Example: your_32_character_auth_token
+TWILIO_PHONE_NUMBER = env("TWILIO_PHONE_NUMBER", default="+1234567890")
+
+
+# Celery Configuration
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+
+# Celery Beat Schedule (for periodic tasks)
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "process-pending-notifications": {
+        "task": "apps.notification.tasks.process_pending_notifications",
+        "schedule": crontab(minute="*/5"),  # Every 5 minutes
+    },
+}
+
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Mind Care Hub API",
+    "DESCRIPTION": "API documentation for Mind Care Hub",
+    "VERSION": "2.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }

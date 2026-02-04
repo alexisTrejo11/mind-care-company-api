@@ -4,14 +4,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import filters
 
 from django_filters.rest_framework import DjangoFilterBackend
-from django.core.exceptions import PermissionDenied
 from django.utils import timezone
-from django.http import Http404
-
+from drf_spectacular.utils import extend_schema
 
 from apps.core.decorators.error_handler import api_error_handler
 from apps.core.decorators.rate_limit import rate_limit
-from apps.core.permissions import IsPatient, IsSpecialistOrStaff
+from apps.core.permissions import IsSpecialistOrStaff
 from apps.core.responses.api_response import APIResponse
 
 from .services import AppointmentService
@@ -94,6 +92,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     @api_error_handler
     @rate_limit(profile="READ_OPERATION", scope="appointment_list")
+    @extend_schema(
+        request=AppointmentCreateSerializer,
+        responses={201: AppointmentSerializer},
+    )
     def list(self, request, *args, **kwargs):
         """List appointments with filters"""
         queryset = self.filter_queryset(self.get_queryset())

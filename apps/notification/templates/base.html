@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }}</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #333333;
+        background-color: #f4f7fa;
+        padding: 20px;
+      }
+
+      .email-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .email-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #ffffff;
+        padding: 40px 30px;
+        text-align: center;
+      }
+
+      .email-header h1 {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 10px;
+      }
+
+      .email-header p {
+        font-size: 16px;
+        opacity: 0.9;
+      }
+
+      .email-body {
+        padding: 40px 30px;
+      }
+
+      .email-body h2 {
+        color: #2d3748;
+        font-size: 22px;
+        margin-bottom: 20px;
+      }
+
+      .email-body p {
+        color: #4a5568;
+        font-size: 16px;
+        margin-bottom: 15px;
+      }
+
+      .message-box {
+        background-color: #f7fafc;
+        border-left: 4px solid #667eea;
+        padding: 20px;
+        margin: 25px 0;
+        border-radius: 4px;
+      }
+
+      .message-box p {
+        margin: 0;
+        color: #2d3748;
+      }
+
+      .button {
+        display: inline-block;
+        padding: 14px 32px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #ffffff !important;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 16px;
+        margin: 20px 0;
+        transition: transform 0.2s;
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+      }
+
+      .info-section {
+        background-color: #edf2f7;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 25px 0;
+      }
+
+      .info-section h3 {
+        color: #2d3748;
+        font-size: 18px;
+        margin-bottom: 15px;
+      }
+
+      .info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #cbd5e0;
+      }
+
+      .info-item:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        font-weight: 600;
+        color: #4a5568;
+      }
+
+      .info-value {
+        color: #2d3748;
+      }
+
+      .email-footer {
+        background-color: #2d3748;
+        color: #a0aec0;
+        padding: 30px;
+        text-align: center;
+        font-size: 14px;
+      }
+
+      .email-footer p {
+        margin: 8px 0;
+        color: #a0aec0;
+      }
+
+      .email-footer a {
+        color: #667eea;
+        text-decoration: none;
+      }
+
+      .social-links {
+        margin: 20px 0;
+      }
+
+      .social-links a {
+        display: inline-block;
+        margin: 0 10px;
+        color: #a0aec0;
+        text-decoration: none;
+      }
+
+      .divider {
+        height: 1px;
+        background-color: #e2e8f0;
+        margin: 30px 0;
+      }
+
+      @media only screen and (max-width: 600px) {
+        body {
+          padding: 10px;
+        }
+
+        .email-header {
+          padding: 30px 20px;
+        }
+
+        .email-body {
+          padding: 30px 20px;
+        }
+
+        .email-header h1 {
+          font-size: 24px;
+        }
+
+        .button {
+          display: block;
+          text-align: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <!-- Header -->
+      <div class="email-header">
+        <h1>MindCare Hub</h1>
+        <p>Tu plataforma de salud mental</p>
+      </div>
+
+      <!-- Body -->
+      <div class="email-body">
+        {% block content %}
+        <h2>{{ title }}</h2>
+        <p>{{ message }}</p>
+        {% endblock %}
+      </div>
+
+      <!-- Footer -->
+      <div class="email-footer">
+        <p><strong>MindCare Hub</strong></p>
+        <p>Plataforma de gestión de salud mental</p>
+
+        <div class="social-links">
+          <a href="#">Twitter</a> | <a href="#">Facebook</a> |
+          <a href="#">LinkedIn</a>
+        </div>
+
+        <div
+          class="divider"
+          style="background-color: #4a5568; margin: 20px 0"
+        ></div>
+
+        <p>
+          Este correo fue enviado a {{ user.email }}<br />
+          <a href="{{ unsubscribe_url }}"
+            >Gestionar preferencias de notificaciones</a
+          >
+        </p>
+        <p style="font-size: 12px; margin-top: 15px">
+          © 2024 MindCare Hub. Todos los derechos reservados.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

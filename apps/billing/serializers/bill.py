@@ -153,7 +153,6 @@ class BillSerializer(serializers.ModelSerializer):
         ]
 
 
-# TODO: Get Appointment Entity Directly
 class BillCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating bills"""
 

@@ -21,9 +21,25 @@ from apps.medical import urls as medical_urls
 from django.contrib import admin
 from django.urls import path
 from apps.users.urls import urlpatterns as users_urls
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
 
 urlpatterns = [
     path("api/v2/admin/", admin.site.urls),
+    path("api/v2/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+        "api/v2/schema/swagger-ui/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
+    path(
+        "api/v2/schema/redoc/",
+        SpectacularRedocView.as_view(url_name="schema"),
+        name="redoc",
+    ),
 ]
 
 urlpatterns += specialists_urls.urlpatterns

@@ -1,0 +1,109 @@
+{% extends "notifications/emails/base.html" %} {% block content %}
+<h2>{{ title }}</h2>
+
+<p>Hola {{ user.get_full_name }},</p>
+
+<div class="message-box">
+  <p>{{ message }}</p>
+</div>
+
+{% if record_type %}
+<div class="info-section">
+  <h3>📋 Información del registro</h3>
+
+  <div class="info-item">
+    <span class="info-label">Tipo:</span>
+    <span class="info-value">{{ record_type }}</span>
+  </div>
+
+  {% if created_at %}
+  <div class="info-item">
+    <span class="info-label">Fecha:</span>
+    <span class="info-value">{{ created_at|date:"d/m/Y H:i" }}</span>
+  </div>
+  {% endif %} {% if provider %}
+  <div class="info-item">
+    <span class="info-label">Profesional:</span>
+    <span class="info-value">{{ provider }}</span>
+  </div>
+  {% endif %} {% if status %}
+  <div class="info-item">
+    <span class="info-label">Estado:</span>
+    <span class="info-value">{{ status }}</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %} {% if view_record_url %}
+<center>
+  <a href="{{ view_record_url }}" class="button">Ver registro médico</a>
+</center>
+{% endif %} {% if prescription %}
+<div
+  style="
+    background-color: #e8f5e9;
+    border-left: 4px solid #4caf50;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #2e7d32; margin-bottom: 15px">💊 Prescripción</h3>
+  <p style="margin: 0; color: #1b5e20">
+    <strong>Medicamento:</strong> {{ prescription.medication }}<br />
+    <strong>Dosis:</strong> {{ prescription.dosage }}<br />
+    <strong>Frecuencia:</strong> {{ prescription.frequency }}<br />
+    {% if prescription.duration %}
+    <strong>Duración:</strong> {{ prescription.duration }}<br />
+    {% endif %}
+  </p>
+</div>
+{% endif %} {% if test_results %}
+<div
+  style="
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #1565c0; margin-bottom: 15px">🔬 Resultados de pruebas</h3>
+  <p style="margin: 0; color: #0d47a1">
+    Los resultados de tus pruebas están disponibles. Por favor revísalos en tu
+    portal.
+  </p>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<p style="font-size: 14px; color: #718096">
+  <strong>Importante:</strong><br />
+  • Este es un documento médico confidencial<br />
+  • Guarda una copia para tus registros<br />
+  • Consulta con tu médico si tienes dudas<br />
+  • No compartas información médica sensible por correo
+</p>
+
+<p
+  style="
+    font-size: 14px;
+    color: #e53e3e;
+    background-color: #fff5f5;
+    padding: 15px;
+    border-radius: 4px;
+    border-left: 4px solid #e53e3e;
+  "
+>
+  <strong>⚠️ Confidencialidad:</strong> Este correo contiene información médica
+  confidencial. Si lo recibiste por error, por favor elimínalo y notifícanos
+  inmediatamente.
+</p>
+
+<p>
+  Para más información, contáctanos en
+  <a href="mailto:registros@mindcarehub.com" style="color: #667eea"
+    >registros@mindcarehub.com</a
+  >
+</p>
+{% endblock %}

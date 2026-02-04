@@ -9,7 +9,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.core.exceptions.base_exceptions import (
     ValidationError,
     NotificationError,
-    ServiceUnavailableError,
 )
 
 from ..models import Notification, NotificationTemplate, NotificationPreference
