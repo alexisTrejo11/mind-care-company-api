@@ -18,11 +18,8 @@ env = environ.Env(
 # Read .env file
 environ.Env.read_env(BASE_DIR / ".env")
 
-# Quick-start development settings - unsuitable for production
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-change-this-in-production")
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
@@ -63,6 +60,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.core.middleware.audit_middleware.AuditLoggingMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -190,53 +188,227 @@ LOGS_DIR.mkdir(exist_ok=True)
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    # ====================
+    # FORMATTERS
+    # ====================
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "format": "[{asctime}] [{levelname}] [{name}] [{process:d}] [{thread:d}] {module}.{funcName}:{lineno} - {message}",
             "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
         },
         "simple": {
-            "format": "{levelname} {message}",
+            "format": "[{asctime}] [{levelname}] [{name}] - {message}",
             "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "json": {
+            "()": "apps.core.logging.logging_formatters.JSONFormatter",
+        },
+        "audit": {
+            "format": "[{asctime}] [{levelname}] AUDIT - {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
         },
     },
+    # FILTERS
+    "filters": {
+        "require_debug_false": {
+            "()": "django.utils.log.RequireDebugFalse",
+        },
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
+        },
+        "exclude_sensitive": {
+            "()": "apps.core.logging.logging_filters.ExcludeSensitiveFilter",
+        },
+        # Filter slow queries only (>100ms)
+        "slow_queries": {
+            "()": "apps.core.logging.logging_filters.SlowQueryFilter",
+            "threshold_ms": 100,
+        },
+    },
+    # HANDLERS
     "handlers": {
+        # Console output (development)
         "console": {
+            "level": "DEBUG" if DEBUG else "INFO",
+            "filters": ["require_debug_true", "exclude_sensitive"],
             "class": "logging.StreamHandler",
             "formatter": "simple",
         },
-        "file": {
+        # General application logs
+        "file_general": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "django.log",
+            "maxBytes": 1024 * 1024 * 10,  # 10 MB
+            "backupCount": 10,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+            "filters": ["exclude_sensitive"],
+        },
+        # Error logs only
+        "file_errors": {
             "level": "ERROR",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/errors.log",
-            "maxBytes": 10485760,  # 10MB
+            "filename": LOGS_DIR / "errors.log",
+            "maxBytes": 1024 * 1024 * 10,  # 10 MB
             "backupCount": 10,
             "formatter": "verbose",
+            "encoding": "utf-8",
+            "filters": ["exclude_sensitive"],
         },
-        "audit_file": {
+        # JSON formatted logs (for ELK/Logstash)
+        "file_json": {
             "level": "INFO",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/audit.log",
-            "maxBytes": 10485760,  # 10MB
+            "filename": LOGS_DIR / "app.json.log",
+            "maxBytes": 1024 * 1024 * 10,  # 10 MB
+            "backupCount": 10,
+            "formatter": "json",
+            "encoding": "utf-8",
+            "filters": ["exclude_sensitive"],
+        },
+        # Audit logs (time-based rotation, keep 90 days)
+        "audit_file": {
+            "level": "INFO",
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "filename": LOGS_DIR / "audit.log",
+            "when": "midnight",
+            "interval": 1,
+            "backupCount": 90,  # Keep 90 days
+            "formatter": "audit",
+            "encoding": "utf-8",
+            # Don't filter sensitive data from audit logs - they need full context
+        },
+        # Database handler (ERROR level only to avoid performance issues)
+        "database": {
+            "level": "ERROR",
+            "class": "apps.core.logging.logging_filters.DatabaseLogHandler",
+            "formatter": "verbose",
+            "filters": ["exclude_sensitive"],
+        },
+        # Email admins for critical errors (production only)
+        "mail_admins": {
+            "level": "ERROR",
+            "filters": ["require_debug_false"],
+            "class": "apps.core.logging.logging_filters.EmailWithContextHandler",
+        },
+        # Celery logs
+        "celery_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "celery.log",
+            "maxBytes": 1024 * 1024 * 10,  # 10 MB
             "backupCount": 10,
             "formatter": "verbose",
+            "encoding": "utf-8",
+            "filters": ["exclude_sensitive"],
+        },
+        # Performance logs
+        "performance_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "performance.log",
+            "maxBytes": 1024 * 1024 * 10,  # 10 MB
+            "backupCount": 5,
+            "formatter": "verbose",
+            "encoding": "utf-8",
         },
     },
+    # LOGGERS
     "loggers": {
+        # Django framework
         "django": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": True,
-        },
-        "core": {
-            "handlers": ["console", "file", "audit_file"],
+            "handlers": ["console", "file_general"],
             "level": "INFO",
             "propagate": False,
         },
-        "apps.users": {
-            "handlers": ["console", "file", "audit_file"],
+        # Database queries (only in DEBUG mode or slow queries)
+        "django.db.backends": {
+            "handlers": ["console"] if DEBUG else [],
+            "level": "DEBUG" if DEBUG else "WARNING",
+            "propagate": False,
+            "filters": [] if DEBUG else ["slow_queries"],
+        },
+        # HTTP requests (errors only)
+        "django.request": {
+            "handlers": ["file_errors", "mail_admins"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # Security events
+        "django.security": {
+            "handlers": ["file_errors", "mail_admins", "audit_file"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        # Django server (development server)
+        "django.server": {
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
+        },
+        # Your application
+        "apps": {
+            "handlers": ["console", "file_general", "file_json", "file_errors"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+        # Audit logger (separate from application logs)
+        "audit": {
+            "handlers": ["audit_file", "database"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Performance monitoring
+        "performance": {
+            "handlers": ["performance_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Celery
+        "celery": {
+            "handlers": ["celery_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "celery.task": {
+            "handlers": ["celery_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Third-party libraries (reduce noise)
+        "requests": {
+            "handlers": ["file_general"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "urllib3": {
+            "handlers": ["file_general"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "boto3": {
+            "handlers": ["file_general"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "botocore": {
+            "handlers": ["file_general"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "elasticsearch": {
+            "handlers": ["file_general"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        # Root logger (catches everything not specified above)
+        "": {
+            "handlers": ["console", "file_general", "file_errors"],
+            "level": "INFO",
         },
     },
 }

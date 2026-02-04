@@ -2,11 +2,14 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
+from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import (
     extend_schema_serializer,
     extend_schema_field,
+    OpenApiTypes,
 )
 from drf_spectacular.types import OpenApiTypes
+
 from .models import User
 
 

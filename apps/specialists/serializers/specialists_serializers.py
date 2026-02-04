@@ -404,7 +404,6 @@ class SpecialistCreateSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(
         required=True,
         help_text="ID of the user account to associate with the specialist profile",
-        min_value=1,
     )
     email = serializers.EmailField(
         required=False,
@@ -784,7 +783,6 @@ class SpecialistSearchSerializer(serializers.Serializer):
     min_rating = serializers.DecimalField(
         max_digits=3,
         decimal_places=2,
-        min_value=0,
         max_value=5,
         required=False,
         help_text="Minimum rating (0.00-5.00). Filters specialists with rating ≥ this value.",
@@ -793,7 +791,6 @@ class SpecialistSearchSerializer(serializers.Serializer):
     max_fee = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
-        min_value=0,
         required=False,
         help_text="Maximum consultation fee. Filters specialists with fee ≤ this value.",
         allow_null=True,
@@ -805,7 +802,6 @@ class SpecialistSearchSerializer(serializers.Serializer):
     )
     service_id = serializers.IntegerField(
         required=False,
-        min_value=1,
         help_text="Filter by specific service ID. Returns specialists offering this service.",
         allow_null=True,
     )
@@ -835,13 +831,11 @@ class SpecialistSearchSerializer(serializers.Serializer):
         help_text="Sort order for results. Prefix with '-' for descending order.",
     )
     page = serializers.IntegerField(
-        min_value=1,
         required=False,
         default=1,
         help_text="Page number for pagination (1-based)",
     )
     page_size = serializers.IntegerField(
-        min_value=1,
         max_value=100,
         required=False,
         default=20,
@@ -1002,12 +996,10 @@ class SpecialistServiceCreateSerializer(serializers.ModelSerializer):
     service_id = serializers.IntegerField(
         required=True,
         help_text="ID of the healthcare service to add to specialist's offerings",
-        min_value=1,
     )
     price_override = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
-        min_value=0,
         required=False,
         allow_null=True,
         help_text="Specialist-specific price. If null, uses service's base price.",
