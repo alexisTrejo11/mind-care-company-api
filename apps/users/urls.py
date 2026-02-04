@@ -7,8 +7,14 @@ from .views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     EmailActivationView,
+    UserManagerViewSet,
 )
 from django.urls import path
+from django.urls import include
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r"api/v2/auth/users", UserManagerViewSet, basename="user-manager")
 
 urlpatterns = [
     path("api/v2/auth/login/", UserLoginView.as_view(), name="user-login"),
@@ -32,3 +38,4 @@ urlpatterns = [
     ),
     path("api/v2/auth/activate/", EmailActivationView.as_view(), name="email-activate"),
 ]
+urlpatterns += router.urls

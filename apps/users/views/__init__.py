@@ -12,7 +12,7 @@ from .password_views import (
     PasswordChangeView,
 )
 from .activation_views import EmailActivationView
-
+from .user_manager_views import UserManagerViewSet
 
 all = [
     UserLoginView,
@@ -23,4 +23,5 @@ all = [
     PasswordResetConfirmView,
     PasswordChangeView,
     EmailActivationView,
+    UserManagerViewSet,
 ]

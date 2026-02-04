@@ -224,6 +224,11 @@ class AvailabilitySerializer(serializers.ModelSerializer):
         help_text="Human-readable name of the day derived from day_of_week",
         read_only=True,
     )
+    day_of_week = serializers.IntegerField(
+        min_value=0,
+        max_value=6,
+        help_text="Day of week as integer (0=Sunday, 1=Monday, ..., 6=Saturday)",
+    )
 
     class Meta:
         model = Availability
@@ -239,11 +244,6 @@ class AvailabilitySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "day_name"]
         extra_kwargs = {
-            "day_of_week": {
-                "help_text": "Day of week as integer (0=Sunday, 1=Monday, ..., 6=Saturday)",
-                "min_value": 0,
-                "max_value": 6,
-            },
             "start_time": {
                 "help_text": "Start time of availability in HH:MM:SS format",
                 "format": "%H:%M:%S",

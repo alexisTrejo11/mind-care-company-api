@@ -12,6 +12,7 @@ from drf_spectacular.types import OpenApiTypes
 from ..models import Specialist, SpecialistService, Service
 from .service_serializers import ServiceSerializer
 from .availability_serializers import AvailabilitySerializer
+from django.core.validators import MinValueValidator
 
 
 User = get_user_model()
@@ -787,6 +788,7 @@ class SpecialistSearchSerializer(serializers.Serializer):
         required=False,
         help_text="Minimum rating (0.00-5.00). Filters specialists with rating ≥ this value.",
         allow_null=True,
+        validators=[MinValueValidator(0)],
     )
     max_fee = serializers.DecimalField(
         max_digits=10,
@@ -836,10 +838,10 @@ class SpecialistSearchSerializer(serializers.Serializer):
         help_text="Page number for pagination (1-based)",
     )
     page_size = serializers.IntegerField(
-        max_value=100,
         required=False,
         default=20,
         help_text="Number of items per page (max: 100)",
+        max_value=100,
     )
 
 

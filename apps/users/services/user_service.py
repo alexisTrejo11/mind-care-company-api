@@ -51,8 +51,15 @@ class UserService:
                     detail="Email already registered", code="email_exists"
                 )
 
+            if phone:
+                exists = User.objects.filter(phone=phone).exists()
+                if exists:
+                    raise ValidationError(
+                        detail="Phone number already registered", code="phone_exists"
+                    )
+
             user = User.objects.create_user(
-                email=email.lower(),
+                email=email.lower() if email else None,
                 password=password,
                 first_name=first_name,
                 last_name=last_name,
@@ -70,6 +77,47 @@ class UserService:
             raise ValidationError(detail=str(e), code="validation_error")
         except Exception as e:
             logger.error(f"Registration error: {str(e)}", exc_info=True)
+            raise
+
+    @staticmethod
+    def register_superuser(**kwargs) -> User:
+        """
+        Registrar superusuario/admin
+        """
+        email = kwargs["email"]
+        password = kwargs["password"]
+        first_name = kwargs["first_name"]
+        last_name = kwargs["last_name"]
+        phone = kwargs.get("phone")
+
+        try:
+            if User.objects.filter(email__iexact=email).exists():
+                raise ValidationError(
+                    detail="Email already registered", code="email_exists"
+                )
+
+            if phone:
+                exists = User.objects.filter(phone=phone).exists()
+                if exists:
+                    raise ValidationError(
+                        detail="Phone number already registered", code="phone_exists"
+                    )
+
+            user = User.objects.create_superuser(
+                email=email.lower() if email else None,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+            )
+
+            logger.info(f"Superuser registered: {user.email} (ID: {user.id})")
+
+            return user
+
+        except DjangoValidationError as e:
+            raise ValidationError(detail=str(e), code="validation_error")
+        except Exception as e:
+            logger.error(f"Superuser registration error: {str(e)}", exc_info=True)
             raise
 
     @staticmethod
