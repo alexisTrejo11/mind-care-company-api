@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 class StripeService:
     """Service for Stripe payment processing"""
 
-    # Initialize Stripe
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+    def __init__(self):
+        """Initialize Stripe with API key"""
+        if hasattr(settings, "STRIPE_SECRET_KEY"):
+            stripe.api_key = settings.STRIPE_SECRET_KEY
 
     @staticmethod
     def create_payment_intent(payment: "Payment") -> Dict[str, Any]:

@@ -31,7 +31,6 @@ class APIResponse:
         response_data = {
             "status": ResponseStatus.SUCCESS.value,
             "message": message,
-            "timestamp": timezone.now().isoformat(),
         }
 
         if data is not None:
@@ -44,6 +43,35 @@ class APIResponse:
             response_data["pagination"] = pagination
 
         return Response(response_data, status=status_code)
+
+    @staticmethod
+    def from_paginated_response(
+        paginator,
+        data,
+        message="Data retrieved successfully",
+        metadata: Optional[Dict] = None,
+    ) -> Response:
+        """
+        Converts a paginated response to standardized format
+        """
+        if paginator is None:
+            return APIResponse.success(message=message, data=data)
+
+        pagination = {
+            "total": paginator.page.paginator.count,
+            "page": paginator.page.number,
+            "page_size": paginator.page_size,
+            "total_pages": paginator.page.paginator.num_pages,
+            "has_next": paginator.page.has_next(),
+            "has_previous": paginator.page.has_previous(),
+        }
+
+        return APIResponse.success(
+            message=message,
+            data=data,
+            pagination=pagination,
+            metadata=metadata,
+        )
 
     @staticmethod
     def error(

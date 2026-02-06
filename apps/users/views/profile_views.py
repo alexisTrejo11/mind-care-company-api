@@ -20,6 +20,8 @@ class UserProfileView(APIView):
     def get(self, request):
         """Get profile of logged-in user"""
         serializer = UserProfileSerializer(request.user)
+        serializer.is_valid(raise_exception=True)
+
         return APIResponse.success(data=serializer.data)
 
     @api_error_handler
@@ -41,7 +43,12 @@ class UserProfileView(APIView):
         )
         serializer.is_valid(raise_exception=True)
 
-        user = UserService.update_profile(request.user, serializer.validated_data)
+        user, update_fields = UserService.update_profile(
+            request.user, serializer.validated_data
+        )
+
+        if update_fields:
+            user.save(update_fields=update_fields)
 
         return APIResponse.success(
             message="Profile updated successfully",

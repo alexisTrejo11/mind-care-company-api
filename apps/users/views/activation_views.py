@@ -26,9 +26,10 @@ class EmailActivationView(APIView):
 
         token = serializer.validated_data["token"]
 
-        user = UserService.activate_user(token)
+        userActivated = UserService.activate_user(token)
+        userActivated.save(update_fields=["is_active"])
 
         return APIResponse.success(
             message="Account activated successfully! You can now log in.",
-            data={"email": user.email},
+            data={"email": userActivated.email},
         )

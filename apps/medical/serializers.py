@@ -181,8 +181,8 @@ class MedicalRecordCreateSerializer(serializers.ModelSerializer):
 
     **Field Specifications:**
 
-    1. **appointment_id field**:
-       - Must reference an existing appointment
+    1. **appointment field**:
+       - Must reference an existing appointment id
        - Appointment must be completed
        - Links medical record to specific consultation
 
@@ -222,15 +222,10 @@ class MedicalRecordCreateSerializer(serializers.ModelSerializer):
        - Determines access restrictions
     """
 
-    appointment_id = serializers.IntegerField(
-        required=True,
-        help_text="ID of the completed appointment for this medical record",
-    )
-
     class Meta:
         model = MedicalRecord
         fields = [
-            "appointment_id",
+            "appointment",
             "diagnosis",
             "prescription",
             "notes",
@@ -265,6 +260,27 @@ class MedicalRecordCreateSerializer(serializers.ModelSerializer):
                 "help_text": "Data confidentiality level (default: standard)",
             },
         }
+
+    def validate_prescription(self, value):
+        if value and (len(value.strip()) < 4 or len(value.strip()) > 1000):
+            raise serializers.ValidationError(
+                "Prescription must be between 4 and 1000 characters if provided."
+            )
+        return value
+
+    def validate_notes(self, value):
+        if value and (len(value.strip()) < 4 or len(value.strip()) > 2000):
+            raise serializers.ValidationError(
+                "Notes must be between 4 and 2000 characters if provided."
+            )
+        return value
+
+    def validate_follow_up_date(self, value):
+        if value and value < timezone.now().date():
+            raise serializers.ValidationError(
+                "Follow-up date must be today or a future date."
+            )
+        return value
 
 
 @extend_schema_serializer(component_name="MedicalRecordUpdate")

@@ -1,10 +1,12 @@
-from .availability_service import AvailabilityService
-from .service_service import ServiceServiceLayer
-from .specialist_service import SpecialistServiceLayer
+from .availability_use_cases import AvailabilityUseCases
+from .company_services_use_cases import CompanyServicesUseCases
+from .specialist_use_cases import SpecialistsUseCases
+from .specialist_availability import SpecialistAvailabilityUseCases
 
 
 __all__ = [
-    "AvailabilityService",
-    "ServiceServiceLayer",
-    "SpecialistServiceLayer",
+    "AvailabilityUseCases",
+    "CompanyServicesUseCases",
+    "SpecialistsUseCases",
+    "SpecialistAvailabilityUseCases",
 ]

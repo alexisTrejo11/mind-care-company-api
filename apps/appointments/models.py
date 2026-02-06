@@ -38,7 +38,7 @@ class Appointment(models.Model):
         max_length=20,
         choices=APPOINTMENT_TYPE_CHOICES,
     )
-
+    id = models.AutoField(primary_key=True)
     appointment_date = models.DateTimeField()
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()

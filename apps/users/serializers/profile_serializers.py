@@ -24,7 +24,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     | first_name | String | No | 1-30 chars | User's given name |
     | last_name | String | No | 1-30 chars | User's family name |
     | full_name | String | Yes | - | Computed full name |
-    | phone | String | No | 3-20 chars | Contact phone number |
+    | phone | String | No | 3-50 chars | Contact phone number |
     | date_of_birth | Date | No | YYYY-MM-DD | Birth date |
     | user_type | String | Yes | "patient" or "specialist" | Account type |
     | is_active | Boolean | Yes | true/false | Account activation status |
@@ -70,12 +70,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id",
+            # Updatable fields
             "email",
             "first_name",
             "last_name",
             "full_name",
-            "phone",
             "date_of_birth",
+            "phone",
             "user_type",
             "is_active",
             "created_at",
@@ -83,7 +84,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
-            "email",
             "user_type",
             "is_active",
             "created_at",
@@ -101,10 +101,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 "max_length": 30,
             },
             "phone": {
-                "help_text": "Contact phone number (3-20 characters)",
+                "help_text": "Contact phone number (3-50 characters)",
                 "required": False,
                 "min_length": 3,
-                "max_length": 20,
+                "max_length": 50,
             },
             "date_of_birth": {
                 "help_text": "Birth date in YYYY-MM-DD format",
@@ -141,3 +141,20 @@ class UserProfileSerializer(serializers.ModelSerializer):
             str: Concatenated full name
         """
         return obj.get_full_name()
+
+    def validate(self, data):
+        """
+        Validate that data ranges and formats are correct for profile updates.
+
+        **Validation Logic:**
+        - If date_of_birth is provided, validate not in future
+        - Raise ValidationError if underage
+        """
+        from datetime import date
+
+        dob = data.get("date_of_birth")
+        if dob:
+            if dob > date.today():
+                raise serializers.ValidationError(
+                    {"date_of_birth": "Date of birth cannot be in the future."}
+                )

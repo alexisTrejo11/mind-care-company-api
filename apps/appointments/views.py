@@ -5,7 +5,7 @@ from rest_framework import filters
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.core.decorators.error_handler import api_error_handler
 from apps.core.decorators.rate_limit import rate_limit
@@ -14,6 +14,7 @@ from apps.core.responses.api_response import APIResponse
 
 from .services import AppointmentService
 from .models import Appointment
+from .filters import AppointmentFilter
 from .serializers import (
     AppointmentSerializer,
     AppointmentCreateSerializer,
@@ -23,9 +24,44 @@ from .serializers import (
 )
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List appointments", tags=["Appointments"]),
+    retrieve=extend_schema(summary="Get appointment details", tags=["Appointments"]),
+    create=extend_schema(summary="Create appointment", tags=["Appointments"]),
+    update=extend_schema(
+        summary="Update appointment (specialist/staff)", tags=["Appointments", "Admin"]
+    ),
+    partial_update=extend_schema(
+        summary="Partial update appointment (specialist/staff)",
+        tags=["Appointments", "Admin"],
+    ),
+    cancel=extend_schema(
+        summary="Cancel appointment", tags=["Appointments"], methods=["post"]
+    ),
+    reschedule=extend_schema(
+        summary="Reschedule appointment", tags=["Appointments"], methods=["post"]
+    ),
+    stats=extend_schema(
+        summary="Get appointment statistics (specialist/staff)",
+        tags=["Appointments", "Stats"],
+        methods=["get"],
+    ),
+    today_appointments=extend_schema(
+        summary="Get today's appointments (specialist/staff)",
+        tags=["Appointments", "Stats"],
+        methods=["get"],
+    ),
+)
 class AppointmentViewSet(viewsets.ModelViewSet):
     """
-    Unified ViewSet to handle all appointment operations
+    Unified ViewSet to handle all appointment operations.
+
+    Provides comprehensive appointment management including:
+    - Creating and scheduling appointments
+    - Filtering appointments by date, status, specialist, and patient
+    - Searching appointments by participant names or notes
+    - Cancelling and rescheduling appointments
+    - Retrieving appointment statistics and today's schedule
     """
 
     filter_backends = [
@@ -33,13 +69,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         filters.SearchFilter,
         filters.OrderingFilter,
     ]
-    filterset_fields = {
-        "status": ["exact", "in"],
-        "appointment_type": ["exact"],
-        "appointment_date": ["gte", "lte", "exact"],
-        "specialist__id": ["exact"],
-        "patient__id": ["exact"],
-    }
+    filterset_class = AppointmentFilter
 
     search_fields = [
         "patient__first_name",
@@ -68,9 +98,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        queryset = Appointment.objects.select_related(
-            "patient", "specialist", "specialist__user"
-        ).all()
+        """Get queryset with user-specific filtering"""
+        queryset = AppointmentService.get_base_queryset()
 
         user = self.request.user
 

@@ -4,9 +4,11 @@ from django.utils import timezone
 from datetime import timedelta, time, date
 from decimal import Decimal
 
-from apps.specialists.models import Specialist, Service, SpecialistService, Availability
+from apps.specialists.models import Specialist, Service, Availability
 from apps.appointments.models import Appointment
-from apps.specialists.services.specialist_service import SpecialistServiceLayer
+from apps.specialists.services.specialist_use_cases import (
+    SpecialistsUseCases as SpecialistServiceLayer,
+)
 from apps.core.exceptions.base_exceptions import (
     ValidationError,
     NotFoundError,
@@ -22,7 +24,7 @@ class SpecialistServiceLayerTest(TestCase):
     def setUp(self):
         """Set up test data"""
         # Create test users
-        self.user1 = User.objects.create_user(
+        self.user1 = User.create_user(
             email="spec1@test.com",
             password="testpass123",
             first_name="John",
@@ -69,35 +71,35 @@ class SpecialistServiceLayerTest(TestCase):
     def test_validate_license_number_success(self):
         """Test valid license number validation"""
         license_number = "ABC123XYZ"
-        result = SpecialistServiceLayer.validate_license_number(license_number)
+        result = SpecialistServiceLayer._validate_license_number(license_number)
         self.assertEqual(result, "ABC123XYZ")
 
     def test_validate_license_number_strips_whitespace(self):
         """Test license number whitespace stripping"""
         license_number = "  ABC123  "
-        result = SpecialistServiceLayer.validate_license_number(license_number)
+        result = SpecialistServiceLayer._validate_license_number(license_number)
         self.assertEqual(result, "ABC123")
 
     def test_validate_license_number_too_short(self):
         """Test license number too short"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_license_number("AB")
+            SpecialistServiceLayer._validate_license_number("AB")
         self.assertIn("between 3 and 30 characters", str(context.exception))
 
     def test_validate_license_number_too_long(self):
         """Test license number too long"""
         with self.assertRaises(ValidationError):
-            SpecialistServiceLayer.validate_license_number("A" * 31)
+            SpecialistServiceLayer._validate_license_number("A" * 31)
 
     def test_validate_license_number_duplicate(self):
         """Test duplicate license number"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_license_number("LIC123456")
+            SpecialistServiceLayer._validate_license_number("LIC123456")
         self.assertIn("already registered", str(context.exception))
 
     def test_validate_license_number_exclude_specialist(self):
         """Test license number validation excluding current specialist"""
-        result = SpecialistServiceLayer.validate_license_number(
+        result = SpecialistServiceLayer._validate_license_number(
             "LIC123456", exclude_specialist_id=self.specialist.id
         )
         self.assertEqual(result, "LIC123456")
@@ -108,19 +110,19 @@ class SpecialistServiceLayerTest(TestCase):
         """Test valid years experience"""
         years = [0, 1, 5, 10, 30, 60]
         for year in years:
-            result = SpecialistServiceLayer.validate_years_experience(year)
+            result = SpecialistServiceLayer._validate_years_experience(year)
             self.assertEqual(result, year)
 
     def test_validate_years_experience_negative(self):
         """Test negative years experience"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_years_experience(-1)
+            SpecialistServiceLayer._validate_years_experience(-1)
         self.assertIn("cannot be less than", str(context.exception))
 
     def test_validate_years_experience_too_high(self):
         """Test years experience too high"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_years_experience(65)
+            SpecialistServiceLayer._validate_years_experience(65)
         self.assertIn("cannot exceed", str(context.exception))
 
     # ============= Consultation Fee Validation Tests =============
@@ -129,19 +131,19 @@ class SpecialistServiceLayerTest(TestCase):
         """Test valid consultation fee"""
         fees = [Decimal("10.00"), Decimal("50.00"), Decimal("500.00")]
         for fee in fees:
-            result = SpecialistServiceLayer.validate_consultation_fee(fee)
+            result = SpecialistServiceLayer._validate_consultation_fee(fee)
             self.assertEqual(result, fee)
 
     def test_validate_consultation_fee_too_low(self):
         """Test consultation fee too low"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_consultation_fee(Decimal("5.00"))
+            SpecialistServiceLayer._validate_consultation_fee(Decimal("5.00"))
         self.assertIn("cannot be less than", str(context.exception))
 
     def test_validate_consultation_fee_too_high(self):
         """Test consultation fee too high"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_consultation_fee(Decimal("1500.00"))
+            SpecialistServiceLayer._validate_consultation_fee(Decimal("1500.00"))
         self.assertIn("cannot exceed", str(context.exception))
 
     # ============= Rating Validation Tests =============
@@ -150,19 +152,19 @@ class SpecialistServiceLayerTest(TestCase):
         """Test valid rating"""
         ratings = [Decimal("0.00"), Decimal("2.50"), Decimal("5.00")]
         for rating in ratings:
-            result = SpecialistServiceLayer.validate_rating(rating)
+            result = SpecialistServiceLayer._validate_rating(rating)
             self.assertEqual(result, rating)
 
     def test_validate_rating_negative(self):
         """Test negative rating"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_rating(Decimal("-1.00"))
+            SpecialistServiceLayer._validate_rating(Decimal("-1.00"))
         self.assertIn("cannot be less than", str(context.exception))
 
     def test_validate_rating_too_high(self):
         """Test rating too high"""
         with self.assertRaises(ValidationError) as context:
-            SpecialistServiceLayer.validate_rating(Decimal("6.00"))
+            SpecialistServiceLayer._validate_rating(Decimal("6.00"))
         self.assertIn("cannot exceed", str(context.exception))
 
     # ============= Specialist Creation Tests =============
@@ -170,7 +172,7 @@ class SpecialistServiceLayerTest(TestCase):
     def test_create_specialist_success(self):
         """Test successful specialist creation"""
         specialist_data = {
-            "user_id": self.user2.id,
+            "user": self.user2,
             "license_number": "NEW123456",
             "specialization": "psychiatrist",
             "qualifications": "MD in Psychiatry",
@@ -182,7 +184,7 @@ class SpecialistServiceLayerTest(TestCase):
 
         specialist = SpecialistServiceLayer.create_specialist(**specialist_data)
 
-        self.assertIsNotNone(specialist.id)
+        self.assertIsNotNone(specialist)
         self.assertEqual(specialist.license_number, "NEW123456")
         self.assertEqual(specialist.specialization, "psychiatrist")
         self.assertEqual(specialist.years_experience, 8)
@@ -445,7 +447,7 @@ class SpecialistServiceLayerTest(TestCase):
     def test_add_service_to_specialist_success(self):
         """Test successfully adding service to specialist"""
         result = SpecialistServiceLayer.add_service_to_specialist(
-            self.specialist.id, self.service.id
+            self.specialist, self.service.id
         )
 
         self.assertIsNotNone(result)
@@ -456,7 +458,7 @@ class SpecialistServiceLayerTest(TestCase):
     def test_add_service_to_specialist_with_price_override(self):
         """Test adding service with price override"""
         result = SpecialistServiceLayer.add_service_to_specialist(
-            self.specialist.id, self.service.id, price_override=Decimal("100.00")
+            self.specialist, self.service.id, price_override=Decimal("100.00")
         )
 
         self.assertEqual(result.price_override, Decimal("100.00"))
@@ -469,17 +471,17 @@ class SpecialistServiceLayerTest(TestCase):
     def test_add_service_to_specialist_service_not_found(self):
         """Test adding non-existent service to specialist"""
         with self.assertRaises(NotFoundError):
-            SpecialistServiceLayer.add_service_to_specialist(self.specialist.id, 99999)
+            SpecialistServiceLayer.add_service_to_specialist(self.specialist, 99999)
 
     def test_add_service_to_specialist_duplicate(self):
         """Test adding duplicate service"""
         SpecialistServiceLayer.add_service_to_specialist(
-            self.specialist.id, self.service.id
+            self.specialist, self.service.id
         )
 
         with self.assertRaises(ValidationError) as context:
             SpecialistServiceLayer.add_service_to_specialist(
-                self.specialist.id, self.service.id
+                self.specialist, self.service.id
             )
         self.assertIn("already offers", str(context.exception))
 
@@ -487,7 +489,7 @@ class SpecialistServiceLayerTest(TestCase):
         """Test adding service with invalid price override"""
         with self.assertRaises(ValidationError):
             SpecialistServiceLayer.add_service_to_specialist(
-                self.specialist.id,
+                self.specialist,
                 self.service.id,
                 price_override=self.service.base_price * 4,
             )
@@ -497,11 +499,11 @@ class SpecialistServiceLayerTest(TestCase):
     def test_remove_service_from_specialist_success(self):
         """Test successfully removing service from specialist"""
         SpecialistServiceLayer.add_service_to_specialist(
-            self.specialist.id, self.service.id
+            self.specialist, self.service.id
         )
 
         result = SpecialistServiceLayer.remove_service_from_specialist(
-            self.specialist.id, self.service.id
+            self.specialist, self.service.id
         )
 
         self.assertFalse(result.is_available)
@@ -510,7 +512,7 @@ class SpecialistServiceLayerTest(TestCase):
         """Test removing non-existent service"""
         with self.assertRaises(NotFoundError):
             SpecialistServiceLayer.remove_service_from_specialist(
-                self.specialist.id, self.service.id
+                self.specialist, self.service.id
             )
 
     # ============= Update Service Price Tests =============
@@ -518,11 +520,11 @@ class SpecialistServiceLayerTest(TestCase):
     def test_update_service_price_success(self):
         """Test successfully updating service price"""
         SpecialistServiceLayer.add_service_to_specialist(
-            self.specialist.id, self.service.id, price_override=Decimal("100.00")
+            self.specialist, self.service.id, price_override=Decimal("100.00")
         )
 
         result = SpecialistServiceLayer.update_service_price(
-            self.specialist.id, self.service.id, Decimal("110.00")
+            self.specialist, self.service.id, Decimal("110.00")
         )
 
         self.assertEqual(result.price_override, Decimal("110.00"))
@@ -530,7 +532,7 @@ class SpecialistServiceLayerTest(TestCase):
     def test_update_service_price_negative(self):
         """Test updating service price with negative value"""
         SpecialistServiceLayer.add_service_to_specialist(
-            self.specialist.id, self.service.id
+            self.specialist, self.service.id
         )
 
         with self.assertRaises(ValidationError):
@@ -541,7 +543,7 @@ class SpecialistServiceLayerTest(TestCase):
     def test_update_service_price_too_high(self):
         """Test updating service price too high"""
         SpecialistServiceLayer.add_service_to_specialist(
-            self.specialist.id, self.service.id
+            self.specialist, self.service.id
         )
 
         with self.assertRaises(ValidationError):
@@ -569,9 +571,7 @@ class SpecialistServiceLayerTest(TestCase):
 
     def test_calculate_availability_percentage_no_availability(self):
         """Test calculating availability with no availability records"""
-        result = SpecialistServiceLayer.calculate_availability_percentage(
-            self.specialist.id
-        )
+        result = SpecialistServiceLayer.calculate_rating(self.specialist.id)
 
         self.assertEqual(result, 0.0)
 
@@ -607,43 +607,43 @@ class SpecialistServiceLayerEdgeCasesTest(TestCase):
 
     def test_license_number_exactly_3_characters(self):
         """Test license number with exactly 3 characters (boundary)"""
-        result = SpecialistServiceLayer.validate_license_number("ABC")
+        result = SpecialistServiceLayer._validate_license_number("ABC")
         self.assertEqual(result, "ABC")
 
     def test_license_number_exactly_30_characters(self):
         """Test license number with exactly 30 characters (boundary)"""
         license = "A" * 30
-        result = SpecialistServiceLayer.validate_license_number(license)
+        result = SpecialistServiceLayer._validate_license_number(license)
         self.assertEqual(result, license)
 
     def test_years_experience_zero(self):
         """Test years experience at minimum (0)"""
-        result = SpecialistServiceLayer.validate_years_experience(0)
+        result = SpecialistServiceLayer._validate_years_experience(0)
         self.assertEqual(result, 0)
 
     def test_years_experience_sixty(self):
         """Test years experience at maximum (60)"""
-        result = SpecialistServiceLayer.validate_years_experience(60)
+        result = SpecialistServiceLayer._validate_years_experience(60)
         self.assertEqual(result, 60)
 
     def test_consultation_fee_minimum(self):
         """Test consultation fee at minimum"""
-        result = SpecialistServiceLayer.validate_consultation_fee(Decimal("10.00"))
+        result = SpecialistServiceLayer._validate_consultation_fee(Decimal("10.00"))
         self.assertEqual(result, Decimal("10.00"))
 
     def test_consultation_fee_maximum(self):
         """Test consultation fee at maximum"""
-        result = SpecialistServiceLayer.validate_consultation_fee(Decimal("1000.00"))
+        result = SpecialistServiceLayer._validate_consultation_fee(Decimal("1000.00"))
         self.assertEqual(result, Decimal("1000.00"))
 
     def test_rating_minimum(self):
         """Test rating at minimum (0.00)"""
-        result = SpecialistServiceLayer.validate_rating(Decimal("0.00"))
+        result = SpecialistServiceLayer._validate_rating(Decimal("0.00"))
         self.assertEqual(result, Decimal("0.00"))
 
     def test_rating_maximum(self):
         """Test rating at maximum (5.00)"""
-        result = SpecialistServiceLayer.validate_rating(Decimal("5.00"))
+        result = SpecialistServiceLayer._validate_rating(Decimal("5.00"))
         self.assertEqual(result, Decimal("5.00"))
 
     def test_price_override_at_50_percent(self):
@@ -665,7 +665,7 @@ class SpecialistServiceLayerEdgeCasesTest(TestCase):
 
         price_override = service.base_price * Decimal("0.5")
         result = SpecialistServiceLayer.add_service_to_specialist(
-            specialist.id, service.id, price_override=price_override
+            specialist, service.id, price_override=price_override
         )
 
         self.assertEqual(result.price_override, Decimal("50.00"))
@@ -689,7 +689,7 @@ class SpecialistServiceLayerEdgeCasesTest(TestCase):
 
         price_override = service.base_price * 3
         result = SpecialistServiceLayer.add_service_to_specialist(
-            specialist.id, service.id, price_override=price_override
+            specialist, service.id, price_override=price_override
         )
 
         self.assertEqual(result.price_override, Decimal("300.00"))

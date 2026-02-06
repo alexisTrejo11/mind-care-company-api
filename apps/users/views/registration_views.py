@@ -6,6 +6,8 @@ from apps.core.responses.api_response import APIResponse
 from ..services.user_service import UserService
 from ..serializers import UserRegistrationSerializer
 from apps.notification.tasks import send_notification
+from apps.users.models import UserManager
+from apps.core.shared import generate_activation_token
 
 
 class UserRegistrationView(APIView):
@@ -24,9 +26,13 @@ class UserRegistrationView(APIView):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user, tokens = UserService.register_user(**serializer.validated_data)
+        UserService.validate_user_register(**serializer.validated_data)
 
-        self._send_activation_email(user, tokens["activation_token"])
+        user = UserManager.create_user(
+            **serializer.validated_data,
+        )
+
+        self._send_activation_account_email(user)
 
         return APIResponse.created(
             message="Registration successful! Please check your email to activate your account.",
@@ -37,8 +43,10 @@ class UserRegistrationView(APIView):
             },
         )
 
-    def _send_activation_email(self, user, activation_token):
+    def _send_activation_account_email(self, user):
         """Send activation email to the newly registered user."""
+        activation_token = generate_activation_token(user)
+
         send_notification.delay(
             template_name="auth_notification",
             user_id=str(user.pk),

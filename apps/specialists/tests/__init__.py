@@ -5,8 +5,8 @@ from .test_models import (
     AvailabilityModelTest,
 )
 from .test_service_layer import (
-    ServiceServiceLayerTest,
-    ServiceServiceLayerEdgeCasesTest,
+    CompanyServicesUseCasesTest,
+    CompanyServicesUseCasesEdgeCasesTest,
 )
 from .test_specialist_layer import (
     SpecialistServiceLayerTest,
@@ -29,8 +29,8 @@ __all__ = [
     "SpecialistModelTest",
     "SpecialistServiceModelTest",
     "AvailabilityModelTest",
-    "ServiceServiceLayerTest",
-    "ServiceServiceLayerEdgeCasesTest",
+    "CompanyServicesUseCasesTest",
+    "CompanyServicesUseCasesEdgeCasesTest",
     "SpecialistServiceLayerTest",
     "SpecialistServiceLayerEdgeCasesTest",
     "SpecialistViewSetTest",

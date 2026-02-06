@@ -41,9 +41,7 @@ class EmailService:
             template_name = EmailService._get_email_template(notification.category)
 
             # Render email
-            html_content = render_to_string(
-                f"notifications/emails/{template_name}.html", context
-            )
+            html_content = render_to_string(f"{template_name}.html", context)
             text_content = strip_tags(html_content)
 
             # Create email

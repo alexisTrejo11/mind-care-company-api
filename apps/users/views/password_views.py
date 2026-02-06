@@ -24,14 +24,13 @@ class PasswordResetRequestView(APIView):
     @api_error_handler
     @rate_limit(profile="SENSITIVE", scope="password_reset")
     def post(self, request):
-        """Solicitar reseteo de contraseña"""
+        """Request password reset email"""
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data["email"]
 
-        reset_token = UserService.request_password_reset(email)
-
+        reset_token = UserService.new_password_reset_token(email)
         """
         if reset_token:
             send_password_reset_email.delay(
@@ -73,7 +72,6 @@ class PasswordResetConfirmView(APIView):
             user_name=user.get_full_name(),
         )
         """
-
         return APIResponse.success(
             message="Password has been reset successfully. "
             "You can now log in with your new password."
@@ -99,7 +97,11 @@ class PasswordChangeView(APIView):
         current_password = serializer.validated_data["current_password"]
         new_password = serializer.validated_data["new_password"]
 
-        UserService.change_password(request.user, current_password, new_password)
+        userUpdated = UserService.change_password(
+            request.user, current_password, new_password
+        )
+
+        userUpdated.save(update_fields=["password"])
 
         """
         send_password_changed_notification.delay(

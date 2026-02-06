@@ -1,16 +1,16 @@
 from datetime import timedelta
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
 
 from apps.core.decorators.error_handler import api_error_handler
 from apps.core.decorators.rate_limit import rate_limit
 from apps.core.responses.api_response import APIResponse
-from apps.core.exceptions.base_exceptions import PrivacyError
+from apps.core.exceptions.base_exceptions import PrivacyError, ValidationError
+from apps.core.permissions import IsAdminOrStaff, IsPatient
 from .models import MedicalRecord
 from .serializers import (
     MedicalRecordSerializer,
@@ -21,13 +21,27 @@ from .serializers import (
     MedicalRecordAuditSerializer,
 )
 from .services import MedicalRecordService
-from apps.core.permissions import IsAdminOrStaff, IsPatient
 
 
 class MedicalRecordViewSet(ModelViewSet):
     """
-    Unified ViewSet to handle all medical record operations
+    Unified ViewSet for medical record operations.
+
+    Provides comprehensive medical record management with:
+    - CRUD operations with role-based access control
+    - Advanced filtering and searching
+    - Statistics and analytics
+    - Record exports
+    - Confidentiality management
+    - Follow-up tracking
+
+    **Authentication:** Required
+    **Permissions:** Based on user role (patient, specialist, admin/staff)
     """
+
+    queryset = MedicalRecord.objects.select_related(
+        "patient", "specialist", "specialist__user", "appointment"
+    )
 
     filter_backends = [
         DjangoFilterBackend,
@@ -54,35 +68,22 @@ class MedicalRecordViewSet(ModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        """Get queryset with access control"""
-        user = self.request.user
-        queryset = MedicalRecord.objects.select_related(
-            "patient", "specialist", "specialist__user", "appointment"
+        """Get queryset with service-driven access control"""
+        return MedicalRecordService.get_filtered_records(
+            user=self.request.user, filters=self.request.query_params
         )
 
-        if user.is_patient():
-            queryset = queryset.filter(patient=user)
-            queryset = queryset.exclude(confidentiality_level="highly_sensitive")
-        elif user.is_specialist():
-            if hasattr(user, "specialist_profile"):
-                queryset = queryset.filter(specialist=user.specialist_profile)
-        elif user.is_staff:
-            queryset = queryset.filter(confidentiality_level="standard")
-
-        # Admin can see everything (no filter)
-
-        return queryset
-
     def get_permissions(self):
+        """Set permissions based on action"""
         if self.action in ["change_confidentiality", "audit_log"]:
             return [IsAdminOrStaff()]
-        elif self.action in ["patient_records", "update", "partial_update", "destroy"]:
-            return [IsPatient()]
+        elif self.action in ["update", "partial_update", "destroy"]:
+            return [IsAuthenticated()]
         else:
             return [IsAuthenticated()]
 
     def get_serializer_class(self):
-        """Return the appropriate serializer based on the action"""
+        """Return appropriate serializer based on action"""
         if self.action == "create":
             return MedicalRecordCreateSerializer
         elif self.action in ["update", "partial_update"]:
@@ -92,32 +93,29 @@ class MedicalRecordViewSet(ModelViewSet):
     @api_error_handler
     @rate_limit(profile="READ_OPERATION", scope="medical_record_list")
     def list(self, request, *args, **kwargs):
-        """List medical records with advanced filtering"""
-        filter_serializer = MedicalRecordFilterSerializer(data=request.query_params)
-        filter_serializer.is_valid(raise_exception=True)
-
-        records = MedicalRecordService.get_filtered_records(
-            user=request.user, filters=filter_serializer.validated_data
-        )
-
-        queryset = self.filter_queryset(records)
+        """List medical records with advanced filtering and pagination"""
+        queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return APIResponse.from_paginated_response(
+                self.paginator,
+                serializer.data,
+                message="Medical records retrieved successfully",
+            )
 
         serializer = self.get_serializer(queryset, many=True)
         return APIResponse.success(
-            message="Medical records retrieved successfully", data=serializer.data
+            message="Medical records retrieved successfully",
+            data=serializer.data,
         )
 
     @api_error_handler
     @rate_limit(profile="READ_OPERATION", scope="medical_record_detail")
     def retrieve(self, request, *args, **kwargs):
-        """Get medical record details"""
+        """Get medical record details with permission flags"""
         instance = self.get_object()
-
         serializer = self.get_serializer(instance)
 
         # Add permission flags
@@ -128,13 +126,14 @@ class MedicalRecordViewSet(ModelViewSet):
         )
 
         return APIResponse.success(
-            message="Medical record details retrieved", data=data
+            message="Medical record details retrieved",
+            data=data,
         )
 
     @api_error_handler
     @rate_limit(profile="WRITE_OPERATION", scope="medical_record_create")
     def create(self, request, *args, **kwargs):
-        """Create new medical record"""
+        """Create a new medical record"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -150,9 +149,8 @@ class MedicalRecordViewSet(ModelViewSet):
     @api_error_handler
     @rate_limit(profile="WRITE_OPERATION", scope="medical_record_update")
     def update(self, request, *args, **kwargs):
-        """Update medical record"""
+        """Update a medical record"""
         instance = self.get_object()
-
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
@@ -168,9 +166,8 @@ class MedicalRecordViewSet(ModelViewSet):
     @api_error_handler
     @rate_limit(profile="WRITE_OPERATION", scope="medical_record_delete")
     def destroy(self, request, *args, **kwargs):
-        """Delete medical record"""
+        """Delete a medical record"""
         instance = self.get_object()
-
         MedicalRecordService.delete_medical_record(
             user=request.user, medical_record=instance
         )
@@ -178,35 +175,40 @@ class MedicalRecordViewSet(ModelViewSet):
         return APIResponse.success(message="Medical record deleted successfully")
 
     @api_error_handler
-    @rate_limit(profile="STANDARD", scope="patient_records")
+    @rate_limit(profile="READ_OPERATION", scope="patient_records")
     @action(detail=False, methods=["get"], url_path="patient-records")
     def patient_records(self, request):
-        """Get medical records for current patient"""
-        queryset = self.get_queryset()
+        """Get all medical records for current patient"""
+        if not request.user.is_authenticated or not request.user.is_patient():
+            raise PrivacyError("Only patients can access their medical records")
+
+        queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return APIResponse.from_paginated_response(
+                self.paginator,
+                serializer.data,
+                message="Patient medical records retrieved",
+            )
 
         serializer = self.get_serializer(queryset, many=True)
         return APIResponse.success(
-            message="Patient medical records retrieved", data=serializer.data
+            message="Patient medical records retrieved",
+            data=serializer.data,
         )
 
     @api_error_handler
-    @rate_limit(profile="STANDARD", scope="upcoming_follow_ups")
+    @rate_limit(profile="READ_OPERATION", scope="upcoming_follow_ups")
     @action(detail=False, methods=["get"], url_path="upcoming-follow-ups")
     def upcoming_follow_ups(self, request):
-        """Get upcoming follow-ups"""
-
-        # Determine date range (next 30 days)
+        """Get upcoming follow-ups for the next 30 days"""
         today = timezone.now().date()
         thirty_days_later = today + timedelta(days=30)
 
-        # Get records with follow-ups
         queryset = (
-            self.get_queryset()
+            self.filter_queryset(self.get_queryset())
             .filter(
                 follow_up_date__isnull=False,
                 follow_up_date__gte=today,
@@ -215,21 +217,7 @@ class MedicalRecordViewSet(ModelViewSet):
             .order_by("follow_up_date")
         )
 
-        # Group by patient
-        from django.db.models import Q
-
-        if request.user.user_type == "specialist":
-            queryset = queryset.filter(specialist=request.user.specialist_profile)
-
         page = self.paginate_queryset(queryset)
-
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-
-        # Add summary
         summary = {
             "total_upcoming": queryset.count(),
             "date_range": {
@@ -237,36 +225,45 @@ class MedicalRecordViewSet(ModelViewSet):
                 "end": thirty_days_later.isoformat(),
             },
         }
+        if page:
+            serializer = self.get_serializer(page, many=True)
+            return APIResponse.from_paginated_response(
+                self.paginator,
+                serializer.data,
+                message="Upcoming follow-ups retrieved",
+                metadata={"summary": summary},
+            )
 
+        serializer = self.get_serializer(queryset, many=True)
         return APIResponse.success(
             message="Upcoming follow-ups retrieved",
-            data={"summary": summary, "records": serializer.data},
+            data=serializer.data,
+            metadata={"summary": summary},
         )
 
     @api_error_handler
-    @rate_limit(profile="STANDARD", scope="medical_stats")
+    @rate_limit(profile="READ_OPERATION", scope="medical_stats")
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
-        """Get medical record statistics"""
-        # Validate parameters
+        """Get medical record statistics and analytics"""
         period = request.query_params.get("period", "month")
-
-        # Use service for business logic
         statistics = MedicalRecordService.get_statistics(
             user=request.user, period=period
         )
 
         return APIResponse.success(
-            message="Medical record statistics retrieved", data=statistics
+            message="Medical record statistics retrieved",
+            data=statistics,
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="medical_confidentiality")
     @action(detail=True, methods=["post"], url_path="change-confidentiality")
     def change_confidentiality(self, request, pk=None):
-        """Change confidentiality level (admin only)"""
+        """Change confidentiality level of a medical record (admin/staff only)"""
         instance = self.get_object()
-
         new_level = request.data.get("confidentiality_level")
+
         if not new_level or new_level not in dict(
             MedicalRecord.CONFIDENTIALITY_CHOICES
         ):
@@ -279,23 +276,19 @@ class MedicalRecordViewSet(ModelViewSet):
         instance.confidentiality_level = new_level
         instance.save()
 
-        # Log change (placeholder)
-        # MedicalRecordAuditService.log_confidentiality_change(instance, request.user, new_level)
-
         return APIResponse.success(
             message="Confidentiality level updated",
             data=MedicalRecordSerializer(instance).data,
         )
 
     @api_error_handler
+    @rate_limit(profile="WRITE_OPERATION", scope="medical_export")
     @action(detail=False, methods=["post"], url_path="export")
     def export_records(self, request):
-        """Export medical records"""
-        # Validate export parameters
+        """Export medical records in specified format"""
         export_serializer = MedicalRecordExportSerializer(data=request.data)
         export_serializer.is_valid(raise_exception=True)
 
-        # Get records with access control
         filters = export_serializer.validated_data
         records = MedicalRecordService.get_filtered_records(
             user=request.user,
@@ -306,8 +299,6 @@ class MedicalRecordViewSet(ModelViewSet):
             },
         )
 
-        # Export logic (placeholder)
-        # In a real implementation, you would generate PDF/CSV/JSON here
         export_format = filters["format"]
 
         return APIResponse.success(
@@ -321,22 +312,24 @@ class MedicalRecordViewSet(ModelViewSet):
         )
 
     @api_error_handler
+    @rate_limit(profile="READ_OPERATION", scope="medical_audit")
     @action(detail=False, methods=["get"], url_path="audit-log")
     def audit_log(self, request):
-        """Get audit log for medical records (admin only)"""
-        if request.user.user_type != "admin":
-            raise PrivacyError("Only admins can access audit logs")
+        """Get audit log for medical records (admin/staff only)"""
+        if not request.user.is_staff:
+            raise PrivacyError("Only admins/staff can access audit logs")
 
-        # Validate audit parameters
         audit_serializer = MedicalRecordAuditSerializer(data=request.query_params)
         audit_serializer.is_valid(raise_exception=True)
 
-        # Get audit logs (placeholder)
-        # In a real implementation, you would query an audit log table
+        # Placeholder for actual audit log implementation
         audit_data = {
             "query": audit_serializer.validated_data,
-            "logs": [],  # Placeholder for actual audit logs
+            "logs": [],
             "total_entries": 0,
         }
 
-        return APIResponse.success(message="Audit log retrieved", data=audit_data)
+        return APIResponse.success(
+            message="Audit log retrieved",
+            data=audit_data,
+        )

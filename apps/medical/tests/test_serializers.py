@@ -18,7 +18,6 @@ from apps.medical.serializers import (
 )
 from apps.appointments.models import Appointment
 from apps.specialists.models import Specialist
-from apps.core.exceptions.base_exceptions import ValidationError, NotFoundError
 
 User = get_user_model()
 
@@ -177,7 +176,7 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
     def test_valid_data(self):
         """Test serializer with valid data"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "Depression diagnosis with comprehensive clinical assessment",
             "prescription": "Medication B - 20mg daily",
             "notes": "Patient responsive to treatment",
@@ -189,7 +188,7 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
         serializer = MedicalRecordCreateSerializer(data=data)
         self.assertTrue(serializer.is_valid())
         self.assertEqual(
-            serializer.validated_data["appointment_id"], self.appointment.id
+            serializer.validated_data["appointment"].id, self.appointment.id
         )
 
     def test_missing_required_fields(self):
@@ -200,13 +199,13 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
 
         serializer = MedicalRecordCreateSerializer(data=data)
         self.assertFalse(serializer.is_valid())
-        self.assertIn("appointment_id", serializer.errors)
+        self.assertIn("appointment", serializer.errors)
         self.assertIn("diagnosis", serializer.errors)
 
     def test_diagnosis_too_short(self):
         """Test diagnosis validation fails when too short"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "Short",
             "confidentiality_level": "standard",
         }
@@ -219,7 +218,7 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
     def test_diagnosis_strips_whitespace(self):
         """Test diagnosis whitespace is stripped"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "  Valid diagnosis with proper assessment  ",
             "confidentiality_level": "standard",
         }
@@ -234,7 +233,7 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
     def test_prescription_too_short(self):
         """Test prescription validation fails when too short"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "Valid diagnosis with assessment",
             "prescription": "Med",
             "confidentiality_level": "standard",
@@ -247,7 +246,7 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
     def test_prescription_optional(self):
         """Test prescription is optional"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "Valid diagnosis with assessment",
             "confidentiality_level": "standard",
         }
@@ -259,7 +258,7 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
     def test_notes_too_short(self):
         """Test notes validation fails when too short"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "Valid diagnosis with assessment",
             "notes": "abc",
             "confidentiality_level": "standard",
@@ -272,7 +271,7 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
     def test_follow_up_date_in_past(self):
         """Test follow-up date validation fails when in past"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "Valid diagnosis with assessment",
             "follow_up_date": (timezone.now().date() - timedelta(days=1)).isoformat(),
             "confidentiality_level": "standard",
@@ -281,25 +280,28 @@ class MedicalRecordCreateSerializerTestCase(TestCase):
         serializer = MedicalRecordCreateSerializer(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertIn("follow_up_date", serializer.errors)
-        self.assertIn("cannot be in the past", str(serializer.errors["follow_up_date"]))
+        self.assertIn(
+            "must be today or a future date.",
+            str(serializer.errors["follow_up_date"]),
+        )
 
     def test_appointment_not_found(self):
         """Test validation fails when appointment doesn't exist"""
         data = {
-            "appointment_id": 99999,
+            "appointment": 99999,
             "diagnosis": "Valid diagnosis with assessment",
             "confidentiality_level": "standard",
         }
 
         serializer = MedicalRecordCreateSerializer(data=data)
         self.assertFalse(serializer.is_valid())
-        self.assertIn("appointment_id", serializer.errors)
-        self.assertIn("not exist", str(serializer.errors["appointment_id"]))
+        self.assertIn("appointment", serializer.errors)
+        self.assertIn("not exist", str(serializer.errors["appointment"]))
 
     def test_default_confidentiality_level(self):
         """Test default confidentiality level is applied"""
         data = {
-            "appointment_id": self.appointment.id,
+            "appointment": self.appointment.id,
             "diagnosis": "Valid diagnosis with assessment",
         }
 

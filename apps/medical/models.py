@@ -26,6 +26,7 @@ class MedicalRecord(models.Model):
         on_delete=models.CASCADE,
         related_name="medical_records",
     )
+    id = models.BigAutoField(primary_key=True)
     diagnosis = models.TextField()
     prescription = models.TextField(blank=True)
     notes = models.TextField(blank=True)

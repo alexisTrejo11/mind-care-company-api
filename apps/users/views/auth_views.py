@@ -1,3 +1,4 @@
+from django.utils import timezone
 from django.forms import ValidationError
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -34,6 +35,7 @@ class UserLoginView(APIView):
         password = serializer.validated_data["password"]
 
         user, tokens = UserService.authenticate_user(email, password)
+        user.update_and_persists_last_login()
 
         return APIResponse.success(
             message="Login successful",
@@ -85,7 +87,6 @@ class RefreshTokenView(APIView):
         from rest_framework_simplejwt.exceptions import TokenError
 
         refresh_token = request.data.get("refresh_token")
-
         if not refresh_token:
             raise ValidationError(detail="Refresh token is required")
 

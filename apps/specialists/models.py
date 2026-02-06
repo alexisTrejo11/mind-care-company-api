@@ -21,6 +21,7 @@ class Specialist(models.Model):
         ("other", "Other"),
     ]
 
+    id = models.AutoField(primary_key=True)
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name="specialist_profile"
     )
@@ -63,6 +64,7 @@ class Service(models.Model):
         ("wellness", "Wellness"),
     ]
 
+    id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
@@ -83,6 +85,10 @@ class Service(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.get_category_display()})"  # type: ignore[attr-defined]
+
+    def specialist_count(self):
+        """Return number of specialists offering this service"""
+        return self.specialists.filter(is_available=True).count()
 
 
 class SpecialistService(models.Model):
@@ -130,6 +136,7 @@ class Availability(models.Model):
         (6, "Saturday"),
     ]
 
+    id = models.AutoField(primary_key=True)
     specialist = models.ForeignKey(
         "specialists.Specialist", on_delete=models.CASCADE, related_name="availability"
     )

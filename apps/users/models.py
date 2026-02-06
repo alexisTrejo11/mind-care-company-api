@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.utils import timezone
 
 from django.db import models
 from django.contrib.auth.models import (
@@ -88,6 +88,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def is_admin_or_staff(self) -> bool:
         return self.is_admin() or self.is_staff
+
+    def update_and_persists_last_login(self):
+        self.last_login = timezone.now()
+        self.save(update_fields=["last_login"])
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"

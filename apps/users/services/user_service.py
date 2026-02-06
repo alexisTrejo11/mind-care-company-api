@@ -6,7 +6,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from ..models import User
 from apps.core.shared import (
     generate_jwt_tokens,
-    generate_activation_token,
     verify_activation_token,
     generate_password_reset_token,
     verify_password_reset_token,
@@ -27,17 +26,14 @@ class UserService:
     """Servicio para operaciones de usuario"""
 
     @staticmethod
-    def register_user(
+    def validate_user_register(
         **kwargs,
-    ) -> Tuple[User, Dict[str, Any]]:
+    ) -> None:
         """
-        Registrar nuevo usuario
-        Retorna: (user, tokens)
+        Validar date user registration data. Checks for email and phone uniqueness. And Password strength. Raises ValidationError if any validation fails.
+        Returns None if all validations pass.
         """
         email = kwargs["email"]
-        password = kwargs["password"]
-        first_name = kwargs["first_name"]
-        last_name = kwargs["last_name"]
         phone = kwargs.get("phone")
         user_type = kwargs.get("user_type", "patient")
         date_of_birth = kwargs.get("date_of_birth")
@@ -58,21 +54,9 @@ class UserService:
                         detail="Phone number already registered", code="phone_exists"
                     )
 
-            user = User.objects.create_user(
-                email=email.lower() if email else None,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-                phone=phone,
-                user_type=user_type,
-                **extra_fields,
-            )
+            from django.contrib.auth.password_validation import validate_password
 
-            activation_token = generate_activation_token(user)
-            logger.info(f"User registered: {user.email} (ID: {user.id})")
-
-            return user, {"activation_token": activation_token}
-
+            validate_password(kwargs["password"], user=None)
         except DjangoValidationError as e:
             raise ValidationError(detail=str(e), code="validation_error")
         except Exception as e:
@@ -182,8 +166,6 @@ class UserService:
                 raise UserAlreadyActiveError()
 
             user.is_active = True
-            user.save(update_fields=["is_active"])
-
             logger.info(f"User activated: {user.email}")
 
             return user
@@ -192,10 +174,10 @@ class UserService:
             raise UserNotFoundError()
 
     @staticmethod
-    def request_password_reset(email: str) -> str:
+    def new_password_reset_token(email: str) -> str:
         """
-        Solicitar reseteo de contraseña
-        Retorna: reset_token
+        Request password reset email
+        Returns: reset_token
         """
         try:
             email = email.lower().strip()
@@ -229,60 +211,53 @@ class UserService:
 
             user = User.objects.get(id=user_id, is_active=True)
             user.set_password(new_password)
+
             user.save(update_fields=["password"])
 
-            # Eliminar token después de uso
             delete_password_reset_token(token)
 
             logger.info(f"Password reset completed: {user.email}")
 
             return user
-
         except User.DoesNotExist:
             raise UserNotFoundError()
 
     @staticmethod
-    def change_password(user: User, current_password: str, new_password: str) -> None:
+    def change_password(user: User, current_password: str, new_password: str) -> User:
         """
-        Cambiar contraseña (usuario autenticado)
+        Change user password. Requires current password for verification.
         """
         try:
-            # Verificar contraseña actual
             if not user.check_password(current_password):
                 raise ValidationError(
                     detail="Current password is incorrect", code="incorrect_password"
                 )
 
-            # Verificar que la nueva sea diferente
             if user.check_password(new_password):
                 raise ValidationError(
                     detail="New password must be different from current",
                     code="same_password",
                 )
 
+            from django.contrib.auth.password_validation import validate_password
+
+            validate_password(new_password, user=user)
             user.set_password(new_password)
-            user.save(update_fields=["password"])
 
             logger.info(f"Password changed: {user.email}")
+            return user
 
         except DjangoValidationError as e:
             raise ValidationError(detail=str(e), code="validation_error")
 
     @staticmethod
-    def update_profile(user: User, data: Dict[str, Any]) -> User:
+    def update_profile(user: User, data: Dict[str, Any]) -> Tuple[User, list]:
         """
-        Actualizar perfil de usuario
+        Update user profile. Only allows updating specific fields.
+        Returns: (updated_user, updated_fields)
         """
         try:
-            # Validaciones específicas de negocio
-            if "email" in data and data["email"] != user.email:
-                if User.objects.filter(email__iexact=data["email"]).exists():
-                    raise ValidationError(
-                        detail="Email already in use", code="email_in_use"
-                    )
-
-            # Actualizar campos permitidos
-            allowed_fields = ["first_name", "last_name", "phone", "date_of_birth"]
+            allowed_fields = ["first_name", "last_name", "date_of_birth"]
             update_fields = []
 
             for field in allowed_fields:
@@ -290,12 +265,8 @@ class UserService:
                     setattr(user, field, data[field])
                     update_fields.append(field)
 
-            if update_fields:
-                user.save(update_fields=update_fields)
-
             logger.info(f"Profile updated: {user.email}")
 
-            return user
-
+            return user, update_fields
         except DjangoValidationError as e:
             raise ValidationError(detail=str(e), code="validation_error")

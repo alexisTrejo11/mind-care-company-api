@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from django.db.models.manager import BaseManager
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Count, F
@@ -273,15 +274,9 @@ class MedicalRecordService:
             f"User {user.email} initiating medical record creation for appointment {appointment_id}"
         )
 
-        try:
-            appointment = Appointment.objects.select_related(
-                "patient", "specialist"
-            ).get(id=appointment_id)
-        except Appointment.DoesNotExist:
-            logger.error(
-                f"Appointment {appointment_id} not found for medical record creation"
-            )
-            raise NotFoundError(detail="Appointment not found")
+        appointment = validated_data.get("appointment")
+        if not appointment:
+            raise ValidationError(detail="Appointment must be provided")
 
         # Validate creation permissions
         cls.validate_record_creation(user, appointment)
@@ -349,7 +344,6 @@ class MedicalRecordService:
         prescription = validated_data.get("prescription")
         follow_up_date = validated_data.get("follow_up_date")
 
-        # Apply business logic validation if fields are being updated
         updated_fields = []
         if diagnosis:
             diagnosis = cls.validate_diagnosis_content(diagnosis)
@@ -377,7 +371,7 @@ class MedicalRecordService:
             medical_record.recommendations = validated_data["recommendations"]
             updated_fields.append("recommendations")
 
-        medical_record.save()
+        medical_record.save(update_fields=updated_fields)
 
         logger.info(
             f"Medical record {medical_record.id} updated by {user.email}. "
@@ -413,8 +407,11 @@ class MedicalRecordService:
         logger.info(f"Medical record {medical_record.id} deleted successfully")
 
     @classmethod
-    def get_filtered_records(cls, user, filters):
+    def get_filtered_records(cls, user, filters={}) -> BaseManager[MedicalRecord]:
         """Get medical records with filters and access control"""
+        if not user or not user.is_authenticated:
+            return MedicalRecord.objects.none()
+
         queryset = MedicalRecord.objects.select_related(
             "patient", "specialist", "specialist__user", "appointment"
         )

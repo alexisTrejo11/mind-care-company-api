@@ -1,7 +1,7 @@
 from datetime import timedelta, time as datetime_time
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Count, Q, Avg, Sum
+from django.db.models import Count, Q, Avg, Sum, QuerySet
 from .models import Appointment
 from apps.specialists.models import Specialist
 from apps.core.exceptions.base_exceptions import (
@@ -25,6 +25,13 @@ class AppointmentService:
 
     # Maximum advance booking (90 days)
     MAX_ADVANCE_BOOKING_DAYS = 90
+
+    @staticmethod
+    def get_base_queryset() -> "QuerySet[Appointment]":
+        """Base queryset for appointments with necessary relationships"""
+        return Appointment.objects.select_related(
+            "patient", "specialist", "specialist__user"
+        ).all()
 
     @staticmethod
     def _normalize_datetime(dt) -> datetime:

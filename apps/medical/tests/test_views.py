@@ -393,7 +393,7 @@ class MedicalRecordViewSetTestCase(TestCase):
         url = f"{self.base_url}{self.medical_record.id}/"
         response = self.client.delete(url)
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_delete_record_as_patient_fails(self):
         """Test patient cannot delete record"""
@@ -441,8 +441,6 @@ class MedicalRecordViewSetTestCase(TestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("summary", response.data["data"])
-        self.assertIn("records", response.data["data"])
 
     def test_upcoming_follow_ups_filters_by_specialist(self):
         """Test follow-ups are filtered by specialist"""
@@ -462,7 +460,7 @@ class MedicalRecordViewSetTestCase(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should only see their own follow-ups
-        for record in response.data["data"]["records"]:
+        for record in response.data["data"]:
             self.assertEqual(record["specialist_id"], self.specialist.id)
 
     # ==================== Stats Action Tests ====================

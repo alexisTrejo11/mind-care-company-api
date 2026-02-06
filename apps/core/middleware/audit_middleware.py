@@ -60,8 +60,8 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         audit_data = {
             "timestamp": time.time(),
             "user_id": str(request.user.id) if request.user.is_authenticated else None,
-            "username": (
-                str(request.user.username)
+            "email": (
+                str(request.user.email)
                 if request.user.is_authenticated
                 else "Anonymous"
             ),
