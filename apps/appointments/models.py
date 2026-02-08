@@ -67,6 +67,9 @@ class Appointment(models.Model):
             models.Index(fields=["patient", "status"]),
         ]
 
+    def get_appointment_type_display(self):
+        return dict(self.APPOINTMENT_TYPE_CHOICES).get(self.appointment_type, "Unknown")
+
     def is_from_specialist(self, specialist):
         return self.specialist == specialist
 

@@ -10,30 +10,6 @@ User = get_user_model()
 class Bill(models.Model):
     """Billing and payment information"""
 
-    PAYMENT_STATUS_CHOICES = [
-        ("draft", "Draft"),
-        ("pending", "Pending"),
-        ("partial", "Partial"),
-        ("paid", "Paid"),
-        ("overdue", "Overdue"),
-        ("cancelled", "Cancelled"),
-        ("refunded", "Refunded"),
-        ("insurance_pending", "Insurance Pending"),
-        ("insurance_approved", "Insurance Approved"),
-        ("insurance_rejected", "Insurance Rejected"),
-    ]
-
-    PAYMENT_METHOD_CHOICES = [
-        ("cash", "Cash"),
-        ("credit_card", "Credit Card"),
-        ("debit_card", "Debit Card"),
-        ("bank_transfer", "Bank Transfer"),
-        ("insurance", "Insurance"),
-        ("online", "Online Payment"),
-        ("check", "Check"),
-        ("wallet", "Digital Wallet"),
-    ]
-
     INVOICE_STATUS_CHOICES = [
         ("draft", "Draft"),
         ("sent", "Sent"),
@@ -43,7 +19,6 @@ class Bill(models.Model):
         ("cancelled", "Cancelled"),
     ]
 
-    # Basic information
     bill_number = models.CharField(max_length=20, unique=True, editable=False)
     appointment = models.OneToOneField(
         "appointments.Appointment", on_delete=models.CASCADE, related_name="bill"
@@ -67,73 +42,90 @@ class Bill(models.Model):
         validators=[MinValueValidator(0)],
     )
     total_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
-    )
-    amount_paid = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        default=Decimal("0.00"),
-        validators=[MinValueValidator(0)],
-    )
-    balance_due = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0.00"),
         validators=[MinValueValidator(0)],
     )
 
-    # Status
     invoice_status = models.CharField(
         max_length=20, choices=INVOICE_STATUS_CHOICES, default="draft"
     )
-    payment_status = models.CharField(
-        max_length=20, choices=PAYMENT_STATUS_CHOICES, default="pending"
-    )
 
-    # Payment method
-    payment_method = models.CharField(
-        max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True
-    )
-
-    # Insurance information
+    # Insurance (if applicable)
     insurance_company = models.CharField(max_length=100, blank=True, null=True)
     policy_number = models.CharField(max_length=50, blank=True, null=True)
-    insurance_claim_id = models.CharField(max_length=100, blank=True, null=True)
     insurance_coverage = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
         validators=[MinValueValidator(0)],
     )
-    patient_responsibility = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0.00"),
-        validators=[MinValueValidator(0)],
-    )
+
+    # Payment tracking fields
+    stripe_invoice_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
 
     # Dates
+    cancellation_date = models.DateField(null=True, blank=True)
     invoice_date = models.DateField(auto_now_add=True)
     due_date = models.DateField()
-    paid_date = models.DateField(null=True, blank=True)
-    cancellation_date = models.DateField(null=True, blank=True)
+    paid_date = models.DateField(null=True, blank=True)  # Added back for tracking
 
     # Notes
     notes = models.TextField(blank=True)
     terms_and_conditions = models.TextField(blank=True)
 
-    # Stripe integration
-    stripe_payment_intent_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_invoice_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_charge_id = models.CharField(max_length=100, blank=True, null=True)
-
-    # Tracking
+    # Audit
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="created_bills"
     )
+
+    @property
+    def amount_paid(self):
+        """Total paid so far (calculated from payments)"""
+        paid_amount = self.payments.filter(status="completed").aggregate(
+            total=models.Sum("amount")
+        )["total"] or Decimal("0.00")
+
+        # Subtract refunded amounts
+        refunded_amount = self.payments.filter(status="refunded").aggregate(
+            total=models.Sum("amount")
+        )["total"] or Decimal("0.00")
+
+        return paid_amount - refunded_amount
+
+    @property
+    def balance_due(self):
+        """Balance due (calculated from total amount and payments)"""
+        return max(self.total_amount - self.amount_paid, Decimal("0.00"))
+
+    @property
+    def payment_status(self):
+        """Payment status based on actual payments and invoice status"""
+        if self.invoice_status == "cancelled":
+            return "cancelled"
+
+        paid = self.amount_paid
+
+        if paid >= self.total_amount:
+            # Update invoice status to paid if not already
+            if self.invoice_status != "paid":
+                self.invoice_status = "paid"
+                self.paid_date = timezone.now().date()
+                self.save(update_fields=["invoice_status", "paid_date"])
+            return "paid"
+        elif paid > 0:
+            return "partial"
+        elif timezone.now().date() > self.due_date:
+            # Update invoice status to overdue if not already
+            if self.invoice_status not in ["paid", "cancelled"]:
+                self.invoice_status = "overdue"
+                self.save(update_fields=["invoice_status"])
+            return "overdue"
+        else:
+            return "pending"
 
     class Meta:
         db_table = "bills"
@@ -142,10 +134,11 @@ class Bill(models.Model):
         ordering = ["-invoice_date"]
         indexes = [
             models.Index(fields=["bill_number"]),
-            models.Index(fields=["payment_status"]),
+            models.Index(fields=["invoice_status"]),
             models.Index(fields=["due_date"]),
             models.Index(fields=["patient", "invoice_status"]),
-            models.Index(fields=["stripe_payment_intent_id"]),
+            models.Index(fields=["stripe_invoice_id"]),
+            models.Index(fields=["created_at"]),
         ]
 
     def __str__(self):
@@ -156,18 +149,14 @@ class Bill(models.Model):
         if not self.bill_number:
             self.bill_number = self.generate_bill_number()
 
-        # Calculate balance
-        self.balance_due = max(self.total_amount - self.amount_paid, 0)
-
-        # Update payment status
-        self.update_payment_status()
+        # Calculate balance and update status if needed
+        if not self._state.adding:  # Only on updates
+            self.update_status_if_needed()
 
         super().save(*args, **kwargs)
 
     def generate_bill_number(self):
         """Generate unique bill number: BILL-YYYYMM-XXXX"""
-        from django.utils import timezone
-
         year_month = timezone.now().strftime("%Y%m")
         last_bill = (
             Bill.objects.filter(bill_number__startswith=f"BILL-{year_month}-")
@@ -183,55 +172,21 @@ class Bill(models.Model):
 
         return f"BILL-{year_month}-{new_number:04d}"
 
-    def update_payment_status(self):
-        """Update payment status based on amounts"""
-        if self.payment_status in ["cancelled", "refunded"]:
-            return
+    def update_status_if_needed(self):
+        """Update invoice status based on payments"""
+        paid = self.amount_paid
 
-        if self.amount_paid >= self.total_amount:
-            self.payment_status = "paid"
+        if paid >= self.total_amount and self.invoice_status != "paid":
             self.invoice_status = "paid"
-            if not self.paid_date:
-                self.paid_date = timezone.now().date()
-        elif self.amount_paid > 0:
-            self.payment_status = "partial"
-        else:
-            # Check if overdue
-            if timezone.now().date() > self.due_date:
-                self.payment_status = "overdue"
-                self.invoice_status = "overdue"
-            else:
-                self.payment_status = "pending"
-
-    def mark_as_paid(self, amount=None, payment_method=None, notes=""):
-        """Mark bill as paid"""
-        from django.utils import timezone
-
-        if amount is None:
-            amount = self.balance_due
-
-        self.amount_paid += amount
-        self.paid_date = timezone.now().date()
-
-        if payment_method:
-            self.payment_method = payment_method
-
-        if notes:
-            self.notes = f"{self.notes}\n\nPayment received: {notes}"
-
-        self.update_payment_status()
-        self.save()
-
-        # Create payment record
-        """
-        Payment.objects.create(
-            bill=self,
-            amount=amount,
-            payment_method=payment_method or self.payment_method,
-            notes=notes,
-            status="completed",
-        )
-        """
+            self.paid_date = timezone.now().date()
+        elif paid > 0 and self.invoice_status not in ["paid", "cancelled"]:
+            self.invoice_status = "sent"  # Partial payment, invoice still active
+        elif timezone.now().date() > self.due_date and self.invoice_status not in [
+            "paid",
+            "cancelled",
+            "overdue",
+        ]:
+            self.invoice_status = "overdue"
 
     def get_payment_url(self):
         """Get payment URL for online payments"""

@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -27,6 +28,7 @@ class Refund(models.Model):
 
     # Reference
     refund_number = models.CharField(max_length=20, unique=True, editable=False)
+    # Usamos strings para evitar importaciones circulares
     payment = models.ForeignKey(
         "billing.Payment", on_delete=models.CASCADE, related_name="refunds"
     )
@@ -79,8 +81,6 @@ class Refund(models.Model):
 
     def generate_refund_number(self):
         """Generate unique refund number: REF-YYYYMM-XXXX"""
-        from django.utils import timezone
-
         year_month = timezone.now().strftime("%Y%m")
         last_refund = (
             Refund.objects.filter(refund_number__startswith=f"REF-{year_month}-")
@@ -98,8 +98,6 @@ class Refund(models.Model):
 
     def mark_as_completed(self):
         """Mark refund as completed"""
-        from django.utils import timezone
-
         self.status = "completed"
         self.processed_date = timezone.now()
         self.save()
