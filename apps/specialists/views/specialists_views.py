@@ -206,7 +206,6 @@ class SpecialistPublicViewSet(viewsets.ReadOnlyModelViewSet):
         """List all active specialists with filtering, searching, and sorting"""
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return APIResponse.from_paginated_response(
@@ -274,7 +273,7 @@ class SpecialistPublicViewSet(viewsets.ReadOnlyModelViewSet):
 
     @api_error_handler
     @rate_limit(profile="PUBLIC", scope="specialist_by_specialization")
-    @action(detail=False, methods=["get"], url_path="by-specialization")
+    @action(detail=False, methods=["get"], url_path="summary/by-specialization")
     def by_specialization(self, request):
         """Get specialists grouped and ranked by their specialization"""
         result = SpecialistsUseCases.get_specialists_by_specialization()
@@ -285,7 +284,7 @@ class SpecialistPublicViewSet(viewsets.ReadOnlyModelViewSet):
                 data["top_specialists"] = serializer.data
 
         return APIResponse.success(
-            message="Specialists grouped by specialization", data=result
+            message="Specialists summary grouped by specialization", data=result
         )
 
 
@@ -432,8 +431,15 @@ class SpecialistManagementViewSet(viewsets.ModelViewSet):
         """
         queryset = super().get_queryset()
 
-        # Allow admins/staff to see inactive specialists for activation action
-        if self.action != "activate" and self.request.user.user_type == "specialist":
+        if self.request.user.is_anonymous:
+            return queryset.none()
+
+        # Specialists can only see/manage their own profile
+        # Exception: admins/staff can see all for activation action
+        is_specialist = self.request.user.user_type == "specialist"
+        is_activation_action = self.action in ["activate", "deactivate"]
+
+        if is_specialist and not is_activation_action:
             # Specialists can only see their own profile
             if hasattr(self.request.user, "specialist_profile"):
                 queryset = queryset.filter(id=self.request.user.specialist_profile.id)
@@ -488,7 +494,7 @@ class SpecialistManagementViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         specialist = SpecialistsUseCases.update_specialist(
-            specialist_id=instance.id, **serializer.validated_data
+            specialist=instance, **serializer.validated_data
         )
 
         return APIResponse.success(

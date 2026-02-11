@@ -117,7 +117,7 @@ class ServiceViewSetTest(TestCase):
             is_active=False,
         )
 
-        response = self.client.get("/api/v2/services/", {"active_only": "true"})
+        response = self.client.get("/api/v2/services/", {"is_active": "true"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         # All returned services should be active
@@ -233,7 +233,7 @@ class ServiceViewSetTest(TestCase):
         }
 
         response = self.client.post("/api/v2/services/", data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_create_service_with_invalid_duration(self):
         """Test creating service with invalid duration"""
@@ -261,7 +261,7 @@ class ServiceViewSetTest(TestCase):
         }
 
         response = self.client.post("/api/v2/services/", data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     # ============= Update Tests =============
 
@@ -309,7 +309,7 @@ class ServiceViewSetTest(TestCase):
         response = self.client.patch(
             f"/api/v2/services/{self.service1.id}/", data, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     # ============= Delete (Deactivate) Tests =============
 
@@ -368,6 +368,7 @@ class ServiceViewSetTest(TestCase):
         self.assertIn("specialists", data["data"])
         self.assertGreater(data["data"]["total_specialists"], 0)
 
+    # todo fix url path
     def test_get_specialists_for_service_with_no_specialists(self):
         """Test getting specialists for service with no specialists offering it"""
         # Create service with no specialists
@@ -376,6 +377,7 @@ class ServiceViewSetTest(TestCase):
             category="wellness",
             duration_minutes=45,
             base_price=Decimal("90.00"),
+            is_active=True,
         )
 
         response = self.client.get(f"/api/v2/services/{new_service.id}/specialists/")

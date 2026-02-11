@@ -44,6 +44,8 @@ class Specialist(models.Model):
         default=decimal.Decimal("0.00"),
         validators=[MinValueValidator(0), MaxValueValidator(5)],
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def can_handle_appointment_type(self, appointment_type):
         """Check if specialist can handle this appointment type"""
@@ -65,7 +67,7 @@ class Service(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, default="")
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     duration_minutes = models.IntegerField(validators=[MinValueValidator(5)])

@@ -220,6 +220,14 @@ class ServiceCreateSerializer(serializers.ModelSerializer):
             raise ValidationError(detail="Service duration must be greater than zero")
         if value < 5:
             raise ValidationError(detail="Minimum service duration is 5 minutes")
+        if value > 480:  # 8 hours
+            raise ValidationError(
+                detail="Service duration cannot exceed 480 minutes (8 hours)"
+            )
+        if value % 15 != 0:
+            raise ValidationError(
+                detail="Service duration should ideally be a multiple of 15   minutes"
+            )
         return value
 
     def validate_base_price(self, value):

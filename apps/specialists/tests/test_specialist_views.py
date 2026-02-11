@@ -27,6 +27,7 @@ class SpecialistViewSetTest(TestCase):
             last_name="User",
             user_type="admin",
             is_staff=True,
+            is_active=True,
         )
 
         # Create specialist user
@@ -36,6 +37,7 @@ class SpecialistViewSetTest(TestCase):
             first_name="John",
             last_name="Doe",
             user_type="specialist",
+            is_active=True,
         )
 
         # Create patient user
@@ -45,6 +47,7 @@ class SpecialistViewSetTest(TestCase):
             first_name="Jane",
             last_name="Patient",
             user_type="patient",
+            is_active=True,
         )
 
         # Create specialist profile
@@ -118,6 +121,7 @@ class SpecialistViewSetTest(TestCase):
 
     # ============= Retrieve Tests =============
 
+    # Fix: 404 instead of 200 for unauthenticated access to specialist details
     def test_retrieve_specialist_unauthenticated(self):
         """Test retrieving specialist details without authentication"""
         response = self.client.get(f"/api/v2/specialists/{self.specialist.id}/")
@@ -155,7 +159,7 @@ class SpecialistViewSetTest(TestCase):
             "bio": "New specialist",
         }
 
-        response = self.client.post("/api/v2/specialists/", data, format="json")
+        response = self.client.post("/api/v2/specialists-manage/", data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response_data = response.json()
         self.assertIn("data", response_data)
@@ -179,7 +183,7 @@ class SpecialistViewSetTest(TestCase):
             "consultation_fee": "150.00",
         }
 
-        response = self.client.post("/api/v2/specialists/", data, format="json")
+        response = self.client.post("/api/v2/specialists-manage/", data, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_create_specialist_unauthenticated(self):
@@ -199,7 +203,7 @@ class SpecialistViewSetTest(TestCase):
             "consultation_fee": "150.00",
         }
 
-        response = self.client.post("/api/v2/specialists/", data, format="json")
+        response = self.client.post("/api/v2/specialists-manage/", data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     # ============= Update Tests =============
@@ -211,7 +215,7 @@ class SpecialistViewSetTest(TestCase):
         data = {"bio": "Updated bio", "consultation_fee": "120.00"}
 
         response = self.client.patch(
-            f"/api/v2/specialists/{self.specialist.id}/", data, format="json"
+            f"/api/v2/specialists-manage/{self.specialist.id}/", data, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         response_data = response.json()
@@ -224,7 +228,7 @@ class SpecialistViewSetTest(TestCase):
         data = {"years_experience": 10}
 
         response = self.client.patch(
-            f"/api/v2/specialists/{self.specialist.id}/", data, format="json"
+            f"/api/v2/specialists-manage/{self.specialist.id}/", data, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         response_data = response.json()
@@ -251,7 +255,7 @@ class SpecialistViewSetTest(TestCase):
         data = {"bio": "Hacked bio"}
 
         response = self.client.patch(
-            f"/api/v2/specialists/{self.specialist.id}/", data, format="json"
+            f"/api/v2/specialists-manage/{self.specialist.id}/", data, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -261,7 +265,9 @@ class SpecialistViewSetTest(TestCase):
         """Test deleting specialist as admin"""
         self.client.force_authenticate(user=self.admin_user)
 
-        response = self.client.delete(f"/api/v2/specialists/{self.specialist.id}/")
+        response = self.client.delete(
+            f"/api/v2/specialists-manage/{self.specialist.id}/"
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify specialist is deactivated, not deleted
@@ -272,7 +278,9 @@ class SpecialistViewSetTest(TestCase):
         """Test deleting specialist as patient (should fail)"""
         self.client.force_authenticate(user=self.patient_user)
 
-        response = self.client.delete(f"/api/v2/specialists/{self.specialist.id}/")
+        response = self.client.delete(
+            f"/api/v2/specialists-manage/{self.specialist.id}/"
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     # ============= Specialist Services Tests =============
@@ -304,7 +312,7 @@ class SpecialistViewSetTest(TestCase):
         data = {"service_id": new_service.id, "price_override": "140.00"}
 
         response = self.client.post(
-            f"/api/v2/specialists/{self.specialist.id}/add-service/",
+            f"/api/v2/specialists-manage/{self.specialist.id}/add-service/",
             data,
             format="json",
         )
@@ -324,7 +332,7 @@ class SpecialistViewSetTest(TestCase):
         data = {"service_id": new_service.id}
 
         response = self.client.post(
-            f"/api/v2/specialists/{self.specialist.id}/add-service/",
+            f"/api/v2/specialists-manage/{self.specialist.id}/add-service/",
             data,
             format="json",
         )
@@ -357,7 +365,7 @@ class SpecialistViewSetTest(TestCase):
         data = {"service_id": new_service.id}
 
         response = self.client.post(
-            f"/api/v2/specialists/{self.specialist.id}/add-service/",
+            f"/api/v2/specialists-manage/{self.specialist.id}/add-service/",
             data,
             format="json",
         )
@@ -370,7 +378,7 @@ class SpecialistViewSetTest(TestCase):
         self.client.force_authenticate(user=self.specialist_user)
 
         response = self.client.delete(
-            f"/api/v2/specialists/{self.specialist.id}/remove-service/{self.service.id}/"
+            f"/api/v2/specialists-manage/{self.specialist.id}/remove-service/{self.service.id}/"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -379,12 +387,13 @@ class SpecialistViewSetTest(TestCase):
         self.client.force_authenticate(user=self.admin_user)
 
         response = self.client.delete(
-            f"/api/v2/specialists/{self.specialist.id}/remove-service/{self.service.id}/"
+            f"/api/v2/specialists-manage/{self.specialist.id}/remove-service/{self.service.id}/"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     # ============= Specialist Availability Tests =============
 
+    # Endpoint Does not Exists
     def test_get_specialist_availability(self):
         """Test getting specialist availability"""
         response = self.client.get(
@@ -418,7 +427,7 @@ class SpecialistViewSetTest(TestCase):
 
     def test_get_specialists_by_specialization(self):
         """Test getting specialists grouped by specialization"""
-        response = self.client.get("/api/v2/specialists/by-specialization/")
+        response = self.client.get("/api/v2/specialists/summary/by-specialization/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertIn("data", data)
@@ -435,7 +444,7 @@ class SpecialistViewSetTest(TestCase):
         self.client.force_authenticate(user=self.admin_user)
 
         response = self.client.post(
-            f"/api/v2/specialists/{self.specialist.id}/activate/"
+            f"/api/v2/specialists-manage/{self.specialist.id}/activate/"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -450,7 +459,7 @@ class SpecialistViewSetTest(TestCase):
         self.client.force_authenticate(user=self.patient_user)
 
         response = self.client.post(
-            f"/api/v2/specialists/{self.specialist.id}/activate/"
+            f"/api/v2/specialists-manage/{self.specialist.id}/activate/"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -461,7 +470,7 @@ class SpecialistViewSetTest(TestCase):
         self.client.force_authenticate(user=self.admin_user)
 
         response = self.client.post(
-            f"/api/v2/specialists/{self.specialist.id}/deactivate/"
+            f"/api/v2/specialists-manage/{self.specialist.id}/deactivate/"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -473,7 +482,7 @@ class SpecialistViewSetTest(TestCase):
         self.client.force_authenticate(user=self.patient_user)
 
         response = self.client.post(
-            f"/api/v2/specialists/{self.specialist.id}/deactivate/"
+            f"/api/v2/specialists-manage/{self.specialist.id}/deactivate/"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -547,7 +556,7 @@ class SpecialistViewSetErrorHandlingTest(TestCase):
             "consultation_fee": "100.00",
         }
 
-        response = self.client.post("/api/v2/specialists/", data, format="json")
+        response = self.client.post("/api/v2/specialists-manage/", data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_create_specialist_with_duplicate_license(self):
@@ -575,7 +584,7 @@ class SpecialistViewSetErrorHandlingTest(TestCase):
             "consultation_fee": "120.00",
         }
 
-        response = self.client.post("/api/v2/specialists/", data, format="json")
+        response = self.client.post("/api/v2/specialists-manage/", data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_update_specialist_with_invalid_years_experience(self):
@@ -596,7 +605,7 @@ class SpecialistViewSetErrorHandlingTest(TestCase):
         data = {"years_experience": -1}  # Invalid
 
         response = self.client.patch(
-            f"/api/v2/specialists/{specialist.id}/", data, format="json"
+            f"/api/v2/specialists-manage/{specialist.id}/", data, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -618,6 +627,8 @@ class SpecialistViewSetErrorHandlingTest(TestCase):
         data = {"service_id": 99999}  # Non-existent
 
         response = self.client.post(
-            f"/api/v2/specialists/{specialist.id}/add-service/", data, format="json"
+            f"/api/v2/specialists-manage/{specialist.id}/add-service/",
+            data,
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

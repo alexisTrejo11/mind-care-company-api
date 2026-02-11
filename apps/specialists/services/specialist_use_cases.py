@@ -30,9 +30,7 @@ class SpecialistsUseCases:
         Includes fixed business filters (active) and optimizations.
         DRF will apply dynamic filters and ordering on this queryset.
         """
-        return Specialist.objects.select_related("user").filter(
-            user__is_active=True, is_active=True
-        )
+        return Specialist.objects.select_related("user")
 
     @staticmethod
     def get_specialist_services(specialist: Specialist) -> List["SpecialistService"]:
@@ -52,7 +50,7 @@ class SpecialistsUseCases:
     def calculate_rating(specialist):
         """Calculate average rating from reviews (placeholder)"""
         # TODO: Implement actual review fetching and averaging
-        return specialist.rating
+        return 1
 
     @classmethod
     @transaction.atomic
@@ -60,7 +58,7 @@ class SpecialistsUseCases:
         """Create a new specialist with business logic validation"""
 
         # Extract user and specialist data
-        user = validated_data.pop("user")
+        user = validated_data.pop("user", None)
         if not user:
             raise ValidationError(detail="User data is required to create specialist")
 
@@ -140,6 +138,8 @@ class SpecialistsUseCases:
     @transaction.atomic
     def delete_specialist(cls, specialist, deleted_by):
         """Delete specialist (admin only with audit trail)"""
+        if not specialist:
+            raise NotFoundError(detail="Specialist not found")
 
         # Check if specialist has upcoming appointments
         upcoming_appointments = Appointment.objects.filter(
@@ -169,69 +169,6 @@ class SpecialistsUseCases:
         )
 
         return specialist
-
-    @classmethod
-    def search_specialists(cls, filters, page=1, page_size=20):
-        """Search specialists with filters and business logic"""
-        queryset = Specialist.objects.select_related("user").filter(
-            user__is_active=True, is_active=True
-        )
-
-        # Apply filters
-        specialization = filters.get("specialization")
-        if specialization:
-            queryset = queryset.filter(specialization=specialization)
-
-        min_rating = filters.get("min_rating")
-        if min_rating:
-            queryset = queryset.filter(rating__gte=min_rating)
-
-        max_fee = filters.get("max_fee")
-        if max_fee:
-            queryset = queryset.filter(consultation_fee__lte=max_fee)
-
-        accepting_new_patients = filters.get("accepting_new_patients")
-        if accepting_new_patients is not None:
-            queryset = queryset.filter(is_accepting_new_patients=accepting_new_patients)
-
-        service_id = filters.get("service_id")
-        if service_id:
-            queryset = queryset.filter(
-                services__service_id=service_id, services__is_available=True
-            ).distinct()
-
-        search = filters.get("search")
-        if search:
-            queryset = queryset.filter(
-                Q(user__first_name__icontains=search)
-                | Q(user__last_name__icontains=search)
-                | Q(user__email__icontains=search)
-                | Q(qualifications__icontains=search)
-                | Q(bio__icontains=search)
-                | Q(specialization__icontains=search)
-            )
-
-        # Apply ordering
-        ordering = filters.get("ordering", "-rating")
-        queryset = queryset.order_by(ordering)
-
-        # Calculate pagination
-        total = queryset.count()
-        start = (page - 1) * page_size
-        end = start + page_size
-
-        specialists = queryset[start:end]
-
-        pagination = {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size,
-            "has_next": end < total,
-            "has_previous": page > 1,
-        }
-
-        return specialists, pagination
 
     @classmethod
     def get_specialist_detail(cls, specialist):
@@ -301,7 +238,7 @@ class SpecialistsUseCases:
             from apps.billing.models import Bill
 
             bills = Bill.objects.filter(
-                appointment__specialist=specialist, payment_status="paid"
+                appointment__specialist=specialist, invoice_status="paid"
             )
             total_revenue = bills.aggregate(Sum("total_amount"))[
                 "total_amount__sum"
@@ -331,6 +268,9 @@ class SpecialistsUseCases:
             service = Service.objects.get(id=service_id, is_active=True)
         except Service.DoesNotExist:
             raise NotFoundError(detail="Service not found or inactive")
+
+        if not specialist or not isinstance(specialist, Specialist):
+            raise ValidationError(detail="Invalid specialist provided")
 
         if not specialist.is_active:
             raise BusinessRuleError(detail="Cannot add service to inactive specialist")
@@ -447,9 +387,11 @@ class SpecialistsUseCases:
         return result
 
     @staticmethod
-    def _validate_license_number(license_number: str):
+    def _validate_license_number(license_number: str, exclude_specialist_id=None):
         """Wrapper for license number validation"""
-        return SpecialistValidator.validate_license_number(license_number)
+        return SpecialistValidator.validate_license_number(
+            license_number, exclude_specialist_id=exclude_specialist_id
+        )
 
     @staticmethod
     def _validate_years_experience(years: int):

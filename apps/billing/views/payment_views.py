@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.core.permissions import IsAdminOrStaff, IsPatient
 from apps.core.exceptions.base_exceptions import ValidationError
@@ -10,7 +11,7 @@ from apps.core.decorators.error_handler import api_error_handler
 from apps.core.decorators.rate_limit import rate_limit
 from apps.core.responses.api_response import APIResponse
 
-from apps.billing.services import BillingService, PaymentService
+from apps.billing.services import BillingService, PaymentService, StripeService
 from apps.billing.models import Refund, InsuranceClaim
 from apps.billing.serializers import (
     PaymentCreateSerializer,
@@ -25,17 +26,112 @@ from apps.billing.serializers import (
 )
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List payments with filtering", tags=["Payments"]),
+    retrieve=extend_schema(summary="Get payment details", tags=["Payments"]),
+    create=extend_schema(
+        summary="Create payment (cash/bank/manual)", tags=["Payments", "Admin"]
+    ),
+    create_online_intent=extend_schema(
+        summary="Create Stripe payment intent",
+        tags=["Payments", "Online"],
+        methods=["post"],
+    ),
+    confirm_online_payment=extend_schema(
+        summary="Confirm Stripe payment", tags=["Payments", "Online"], methods=["post"]
+    ),
+    verify_bank_transfer=extend_schema(
+        summary="Verify bank transfer (staff only)",
+        tags=["Payments", "Admin"],
+        methods=["post"],
+    ),
+    process_refund=extend_schema(
+        summary="Issue payment refund",
+        tags=["Payments", "Refunds", "Admin"],
+        methods=["post"],
+    ),
+    list_refunds=extend_schema(
+        summary="List refunds for payment",
+        tags=["Payments", "Refunds"],
+        methods=["get"],
+    ),
+)
 class PaymentViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing payments
+    Unified ViewSet to handle all payment operations.
 
-    Supports filtering by:
-    - start_date, end_date: Payment date range
-    - payment_method: Cash, bank transfer, online, etc.
-    - status: pending, completed, failed, refunded
-    - patient_id: Filter by patient
-    - bill_id: Filter by bill
-    - min_amount, max_amount: Amount range
+    Provides comprehensive payment processing including:
+    - Recording and tracking payments (cash, bank transfer, online)
+    - Creating Stripe payment intents for online checkout
+    - Verifying bank transfer payments
+    - Processing and tracking refunds
+    - Listing and filtering payment history
+
+    **Access Control:**
+    - List/Retrieve: Any authenticated user (filtered by permissions)
+    - Create: Patient or Admin/Staff
+    - Online Intent: Patient or Admin/Staff
+    - Confirm Payment: Patient or Admin/Staff
+    - Verify/Refund: Admin/Staff only
+    - List Refunds: Any authenticated user
+
+    **Payment Methods Supported:**
+    - **cash**: Cash payment (auto-reference generated)
+    - **bank_transfer**: Bank transfer (ACH, wire, etc.) - requires verification
+    - **online**: Stripe payment via card or digital wallet
+    - **digital_wallet**: Apple Pay, Google Pay (via Stripe)
+
+    **Filtering Capabilities:**
+    - **Date Range**: start_date, end_date (payment date)
+    - **Amount Range**: min_amount, max_amount (payment amount)
+    - **Status**: status (pending, completed, failed, refunded)
+    - **Method**: payment_method (cash, bank_transfer, online, digital_wallet)
+    - **User**: patient_id
+    - **Bill**: bill_id
+    - **Search**: Full-text search on payment_number, patient name, email, bank reference, notes
+
+    **Ordering Options:**
+    - payment_date (default: -payment_date, newest first)
+    - amount
+    - created_at
+    - status
+
+    **Common Use Cases:**
+    - GET /api/payments/ - List user's payments
+    - GET /api/payments/123/ - View payment details
+    - POST /api/payments/ - Record manual payment
+    - POST /api/payments/online/intent/ - Create online payment intent
+    - POST /api/payments/{id}/online/confirm/{intent_id}/ - Confirm online payment
+    - POST /api/payments/123/verify-bank-transfer/ - Verify bank transfer
+    - POST /api/payments/123/refunds/ - Issue refund
+    - GET /api/payments/123/refunds/ - View payment's refunds
+
+    **Payment Processing Workflows:**
+
+    1. **Cash Payment:**
+       - POST to create payment
+       - Auto-generates reference number
+       - Status: pending → completed (admin confirms)
+
+    2. **Bank Transfer:**
+       - POST to create payment
+       - Bank reference tracked
+       - Status: pending → completed (admin verifies)
+       - POST verify-bank-transfer/ to confirm
+
+    3. **Online Payment (Stripe):**
+       - POST online/intent/ to create payment intent
+       - Returns client_secret for frontend
+       - Frontend processes payment with Stripe Elements
+       - POST online/confirm/{intent_id}/ to confirm
+       - Status: pending → completed (Stripe webhook confirms)
+
+    4. **Refund Processing:**
+       - POST {id}/refunds/ to initiate refund
+       - Can refund full or partial amount
+       - Multiple refunds allowed per payment
+       - Stripe refunds processed automatically
+       - Cash/bank refunds tracked for manual processing
     """
 
     filter_backends = [
@@ -61,7 +157,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Assign permissions based on action"""
         if self.action in ["create", "create_online_intent", "confirm_online_payment"]:
-            return [IsPatient() | IsAdminOrStaff()]
+            return [IsPatient(), IsAdminOrStaff()]
         elif self.action in ["verify_bank_transfer", "process_refund"]:
             return [IsAdminOrStaff()]
         return [IsAuthenticated()]
@@ -111,7 +207,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
 
-        # Get detailed summary for payment
         summary = PaymentService.get_payment_summary(instance)
 
         return APIResponse.success(
@@ -128,9 +223,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
         """Create payment (generic - for admin/staff)"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        # Create payment using service layer
-        from apps.billing.services.billing_service import BillingService
 
         payment = BillingService.create_payment(
             bill_id=serializer.validated_data["bill_id"],
@@ -159,9 +251,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
             amount=serializer.validated_data["amount"],
             user=request.user,
         )
-
-        # Get Stripe intent details
-        from apps.billing.services.stripe_service import StripeService
 
         stripe_result = StripeService().get_payment_intent_status(
             payment.stripe_payment_intent_id
@@ -267,7 +356,48 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing payment methods
+    ViewSet for managing user's stored payment methods.
+
+    Provides payment method storage and retrieval for customers,
+    enabling reusable payment information for future transactions.
+    Supports multiple payment methods with default method selection.
+
+    **Access Control:**
+    - All operations: Authenticated users (can only manage own methods)
+    - List: Get user's payment methods
+    - Create: Add new payment method
+    - Update: Modify method details (limited fields)
+    - Set Default: Mark as default payment method
+
+    **Payment Method Operations:**
+    - GET /api/payment-methods/ - List user's payment methods
+    - POST /api/payment-methods/ - Add new payment method
+    - PATCH /api/payment-methods/{id}/ - Update method (is_active field)
+    - POST /api/payment-methods/{id}/set-default/ - Make default
+    - DELETE /api/payment-methods/{id}/ - Remove payment method
+
+    **Updatable Fields:**
+    - is_default: Set method as default payment method
+    - is_active: Activate or deactivate method
+
+    **Payment Method Types:**
+    - **card**: Credit/debit card (via Stripe)
+    - **bank_transfer**: Bank account for ACH transfers
+    - **cash**: Cash payment (manual)
+    - **digital_wallet**: Apple Pay, Google Pay (via Stripe)
+
+    **Security Features:**
+    - Sensitive data masked (last 4 digits only shown)
+    - Card details only visible for card type methods
+    - Bank details only visible for bank transfer methods
+    - PCI compliance through Stripe tokenization
+
+    **Common Use Cases:**
+    - List saved credit cards
+    - Add new payment method
+    - Set default payment method for future transactions
+    - Disable old payment method
+    - Manage multiple payment methods per user
     """
 
     permission_classes = [IsAuthenticated]
@@ -356,7 +486,66 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
 
 class RefundViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing refunds (admin/staff only)
+    ViewSet for managing refunds (admin/staff only).
+
+    Provides refund management and tracking for issued refunds.
+    Handles refund processing, status updates, and completion tracking.
+    All operations restricted to admin/staff users.
+
+    **Access Control:**
+    - All operations: Admin/Staff only
+    - Patients can initiate refunds via Payment ViewSet
+    - Admin/Staff manages completion and status
+
+    **Refund Operations:**
+    - GET /api/refunds/ - List all refunds
+    - GET /api/refunds/{id}/ - View refund details
+    - POST /api/refunds/{id}/mark-completed/ - Mark refund processed
+    - PATCH /api/refunds/{id}/ - Update refund details
+
+    **Refund Status Tracking:**
+    - "pending": Refund initiated, awaiting processing
+    - "completed": Refund successfully issued
+    - "failed": Refund failed (see admin notes)
+    - "cancelled": Refund cancelled, no money returned
+
+    **Processing Methods:**
+    - **Card**: Automatic Stripe refund (3-5 business days)
+    - **Bank Transfer**: Manual reversal instructions
+    - **Cash**: Manual refund to customer
+    - **Digital Wallet**: Automatic wallet refund
+
+    **Refund Reasons Supported:**
+    - patient_request: Customer requested
+    - incorrect_charge: Billing error
+    - insurance_adjustment: Insurance change
+    - service_not_rendered: Service not completed
+    - policy_violation: Terms violation
+    - payment_reversal: Transaction reversal
+    - customer_dissatisfaction: Satisfaction issue
+    - other: Other reason
+
+    **Partial & Full Refunds:**
+    - Supports partial refund amounts
+    - Multiple refunds per payment allowed
+    - Total cannot exceed original payment
+    - Each tracked separately with audit trail
+
+    **Common Use Cases:**
+    - Process customer refund requests
+    - Handle returned/cancelled services
+    - Correct billing errors
+    - Process insurance adjustments
+    - Track refund status for customers
+    - Generate refund reports
+
+    **Refund Workflow:**
+    1. Customer/Staff initiates refund request (via Payment ViewSet)
+    2. Refund record created with "pending" status
+    3. For cards: Stripe processes automatically
+    4. For bank/cash: Admin processes manually
+    5. Mark-completed action updates status
+    6. Customer notified when complete
     """
 
     permission_classes = [IsAdminOrStaff]
@@ -410,7 +599,95 @@ class RefundViewSet(viewsets.ModelViewSet):
 
 class InsuranceClaimViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing insurance claims
+    ViewSet for managing insurance claims (admin/staff only).
+
+    Provides comprehensive insurance claim management including creation,
+    submission, status tracking, and claim lifecycle management. Supports
+    complex medical coding (ICD-10 diagnosis, CPT procedures) and EDI
+    standards compliance for insurance submissions.
+
+    **Access Control:**
+    - All operations: Admin/Staff only
+    - Patients view claims via Bill/Payment endpoints
+    - Admin/Staff manages full claim lifecycle
+
+    **Claim Operations:**
+    - GET /api/insurance-claims/ - List all claims
+    - GET /api/insurance-claims/{id}/ - View claim details
+    - POST /api/insurance-claims/ - Create new claim
+    - PATCH /api/insurance-claims/{id}/ - Update claim
+    - POST /api/insurance-claims/{id}/submit/ - Submit to insurer
+
+    **Claim Status Progression:**
+    - "draft": Initial claim, not yet submitted
+    - "submitted": Sent to insurance company
+    - "acknowledged": Insurance received and processing
+    - "pending_review": Active review by insurer
+    - "approved": Approved for payment
+    - "approved_partial": Partially approved
+    - "denied": Denied by insurer
+    - "paid": Payment received from insurer
+    - "appealed": Denial appealed
+
+    **Claim Information:**
+    - **Insurance Details**: Company, policy, group number
+    - **Subscriber Info**: Policy holder, relationship to patient
+    - **Medical Codes**: Diagnosis (ICD-10), Procedure (CPT) codes
+    - **Amounts**: Claimed, insurance responsibility, patient responsibility, denied
+    - **Dates**: Service date, submission dates, decision dates
+    - **EDI Reference**: EDI file, reference number, payer claim number
+
+    **Medical Coding:**
+    - **Diagnosis Codes**: ICD-10 format (e.g., "E10.9", "J44.0")
+    - **Procedure Codes**: CPT format (e.g., "99213", "92004")
+    - Multiple codes supported per claim
+    - Automatically validated on submission
+
+    **Amount Breakdown:**
+    - total_claimed_amount: Total bill for services
+    - insurance_responsibility: Amount insurer pays
+    - patient_responsibility: Patient copay/coinsurance
+    - denied_amount: Amount insurer denies
+    - Formula: insurance + patient + denied = total_claimed_amount
+
+    **Subscriber Relationships:**
+    - "self": Patient is policy holder
+    - "spouse": Spouse's insurance policy
+    - "child": Parent's insurance (child beneficiary)
+    - "other": Other coverage arrangement
+
+    **EDI Integration:**
+    - Supports X.12 (EDI) electronic submissions
+    - Generates EDI files for submission
+    - Tracks EDI reference numbers
+    - Payer claim numbers for follow-up
+    - HIPAA-compliant transmissions
+
+    **Common Use Cases:**
+    - Create and submit insurance claims
+    - Track claim status and payments
+    - Handle claim denials and appeals
+    - Generate EOB (Explanation of Benefits) summaries
+    - Manage secondary insurance claims
+    - Follow up on pending claims
+    - Generate claim aging reports
+
+    **Claim Workflow:**
+    1. Admin creates claim from bill
+    2. Populates insurance and patient responsibility amounts
+    3. Adds diagnosis and procedure codes
+    4. Submit to insurance company (generates EDI)
+    5. Monitor status until payment received
+    6. Handle denials with appeals if needed
+    7. Reconcile payment with EOB
+    8. Update patient responsibility
+
+    **Insurance Company Integration:**
+    - Multiple insurance companies supported
+    - Tracks coverage details per claim
+    - Manages denials and appeals
+    - Supports secondary insurance
+    - Integrates with claim scrubbing services
     """
 
     permission_classes = [IsAdminOrStaff]

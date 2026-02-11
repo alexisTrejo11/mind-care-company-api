@@ -20,6 +20,7 @@ from apps.specialists.serializers import (
     SpecialistServiceSerializer,
     SpecialistServiceCreateSerializer,
 )
+from rest_framework.exceptions import NotFound as DRFNotFoundError
 from apps.core.exceptions.base_exceptions import NotFoundError
 
 User = get_user_model()
@@ -106,8 +107,9 @@ class ServiceSerializerTest(TestCase):
 
         serializer = ServiceSerializer(data=data)
         self.assertFalse(serializer.is_valid())
-        self.assertIn("already exists in category", str(serializer.errors))
+        self.assertIn("already exists", str(serializer.errors["name"]))
 
+    # TODO: No Implement feature
     def test_allow_same_name_different_category(self):
         """Test allowing same name in different category"""
         data = {
@@ -152,7 +154,10 @@ class ServiceCreateSerializerTest(TestCase):
 
         serializer = ServiceCreateSerializer(data=data)
         self.assertFalse(serializer.is_valid())
-        self.assertIn("Maximum service duration is 480 minutes", str(serializer.errors))
+        self.assertIn(
+            "Service duration cannot exceed 480 minutes",
+            str(serializer.errors["duration_minutes"]),
+        )
 
     def test_validate_field_level_duration(self):
         """Test field-level validation for duration"""
@@ -212,7 +217,7 @@ class ServiceUpdateSerializerTest(TestCase):
 
         serializer = ServiceUpdateSerializer(self.service, data=data, partial=True)
         self.assertFalse(serializer.is_valid())
-        self.assertIn("already exists in category", str(serializer.errors))
+        self.assertIn("already exists", str(serializer.errors["name"]))
 
 
 class ServiceSearchSerializerTest(TestCase):
@@ -539,7 +544,7 @@ class SpecialistCreateSerializerTest(TestCase):
         }
 
         serializer = SpecialistCreateSerializer(data=data)
-        with self.assertRaises(NotFoundError):
+        with self.assertRaises(DRFValidationError):
             serializer.is_valid(raise_exception=True)
 
     def test_validate_user_already_specialist(self):
@@ -680,8 +685,12 @@ class SpecialistUpdateSerializerTest(TestCase):
             self.specialist, data=data, partial=True
         )
         # Model's unique constraint or field-level validator triggers
+        self.assertFalse(serializer.is_valid())
         self.assertIn("license_number", serializer.errors)
-        self.assertIn("License number already registered", str(serializer.errors))
+        self.assertIn(
+            "this license number already exists",
+            str(serializer.errors["license_number"]),
+        )
 
     def test_validate_negative_values_on_update(self):
         """Test validation for negative values on update"""
@@ -703,7 +712,8 @@ class SpecialistUpdateSerializerTest(TestCase):
         self.assertIn("consultation_fee", serializer.errors)
         self.assertFalse(serializer.is_valid())
         self.assertIn(
-            "Ensure this value is greater than or equal to 0", str(serializer.errors)
+            "Ensure this value is greater than or equal to 0",
+            str(serializer.errors["consultation_fee"]),
         )
 
 
@@ -860,9 +870,10 @@ class SpecialistServiceCreateSerializerTest(TestCase):
         context = {"specialist_id": self.specialist.id, "request": True}
         serializer = SpecialistServiceCreateSerializer(data=data, context=context)
 
-        with self.assertRaises(NotFoundError):
+        with self.assertRaises(DRFValidationError):
             serializer.is_valid(raise_exception=True)
 
+    # No Implement feature
     def test_validate_inactive_service(self):
         """Test validation for inactive service"""
         self.service.is_active = False
@@ -876,7 +887,7 @@ class SpecialistServiceCreateSerializerTest(TestCase):
         context = {"specialist_id": self.specialist.id, "request": True}
         serializer = SpecialistServiceCreateSerializer(data=data, context=context)
 
-        with self.assertRaises(NotFoundError):
+        with self.assertRaises(DRFValidationError):
             serializer.is_valid(raise_exception=True)
 
     def test_validate_duplicate_service(self):

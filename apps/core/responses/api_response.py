@@ -57,15 +57,20 @@ class APIResponse:
         if paginator is None:
             return APIResponse.success(message=message, data=data)
 
+        # Use the actual length of returned data as page_size
+        # This reflects the actual page size used for this page
+        page_size = len(data) if data else paginator.page_size
+
         pagination = {
             "total": paginator.page.paginator.count,
             "page": paginator.page.number,
-            "page_size": paginator.page_size,
+            "page_size": page_size,
             "total_pages": paginator.page.paginator.num_pages,
             "has_next": paginator.page.has_next(),
             "has_previous": paginator.page.has_previous(),
         }
 
+        print(data)
         return APIResponse.success(
             message=message,
             data=data,

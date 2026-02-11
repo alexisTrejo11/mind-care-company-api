@@ -19,6 +19,7 @@ class Bill(models.Model):
         ("cancelled", "Cancelled"),
     ]
 
+    id = models.AutoField(primary_key=True)
     bill_number = models.CharField(max_length=20, unique=True, editable=False)
     appointment = models.OneToOneField(
         "appointments.Appointment", on_delete=models.CASCADE, related_name="bill"

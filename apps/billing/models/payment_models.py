@@ -34,7 +34,7 @@ class Payment(models.Model):
     # Reference
     id = models.AutoField(primary_key=True)
     payment_number = models.CharField(max_length=20, unique=True, editable=False)
-    # Usamos ForeignKey con string para evitar importación circular
+
     bill = models.ForeignKey(
         "billing.Bill", on_delete=models.CASCADE, related_name="payments"
     )

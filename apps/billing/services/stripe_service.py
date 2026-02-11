@@ -466,6 +466,9 @@ class StripeService:
         Returns:
             Payment intent status
         """
+        if not payment_intent_id:
+            raise PaymentError(detail="Payment intent ID is required")
+
         try:
             intent = stripe.PaymentIntent.retrieve(payment_intent_id)
 

@@ -188,7 +188,8 @@ class EmailWithContextHandler(logging.Handler):
             from django.core.mail import mail_admins
             from django.conf import settings
 
-            subject = f"[{settings.ENVIRONMENT}] {record.levelname}: {record.getMessage()[:100]}"
+            environment = getattr(settings, "ENVIRONMENT", "development")
+            subject = f"[{environment}] {record.levelname}: {record.getMessage()[:100]}"
 
             formatter = self.formatter or logging.Formatter()
             message = self._build_message(record, formatter)

@@ -1,10 +1,12 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.core.permissions import IsAdminOrStaff, IsSpecialist, IsPatient
 from apps.core.exceptions.base_exceptions import ValidationError
@@ -20,24 +22,88 @@ from apps.billing.serializers import (
     BillFilterSerializer,
     BillingStatsSerializer,
     PaymentCreateSerializer,
-    BillFilterSerializer,
     PaymentSerializer,
 )
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List bills with filtering", tags=["Billing"]),
+    retrieve=extend_schema(summary="Get bill details", tags=["Billing"]),
+    create=extend_schema(
+        summary="Create bill from appointment", tags=["Billing", "Admin"]
+    ),
+    update=extend_schema(summary="Update bill (staff only)", tags=["Billing", "Admin"]),
+    partial_update=extend_schema(
+        summary="Partial update bill (staff only)", tags=["Billing", "Admin"]
+    ),
+    send_invoice=extend_schema(
+        summary="Send bill invoice to patient",
+        tags=["Billing", "Admin"],
+        methods=["post"],
+    ),
+    send_reminder=extend_schema(
+        summary="Send payment reminder", tags=["Billing", "Admin"], methods=["post"]
+    ),
+    mark_as_paid=extend_schema(
+        summary="Mark bill as paid", tags=["Billing", "Admin"], methods=["post"]
+    ),
+    cancel=extend_schema(
+        summary="Cancel bill", tags=["Billing", "Admin"], methods=["post"]
+    ),
+    invoice_pdf=extend_schema(
+        summary="Download bill as PDF", tags=["Billing"], methods=["get"]
+    ),
+)
 class BillViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing bills.
+    Unified ViewSet to handle all bill (invoice) operations.
 
-    Filtering is handled by the BillFilter class which supports:
-    - start_date, end_date: Filter by invoice date range
-    - min_amount, max_amount: Filter by total amount
-    - invoice_status: Filter by status
-    - patient_id, specialist_id: Filter by user
-    - insurance_company, has_insurance: Filter by insurance info
-    - search: Full-text search across bill details
+    Provides comprehensive invoice management including:
+    - Creating and viewing bills (invoices)
+    - Filtering and searching bills by various criteria
+    - Sending invoices and payment reminders to patients
+    - Tracking bill status and payment status
+    - Managing insurance information and claims
+    - Generating PDF invoices for download
 
-    Example: /api/bills/?start_date=2024-01-01&search=john&invoice_status=pending
+    **Access Control:**
+    - List/Retrieve: Any authenticated user (filtered by permissions)
+    - Create: Admin/Staff or Specialist
+    - Update/Delete/Actions: Admin/Staff only
+    - PDF Download: Patient, Specialist, Admin/Staff for their records
+
+    **Filtering Capabilities:**
+    - **Date Range**: start_date, end_date (invoice date)
+    - **Amount Range**: min_amount, max_amount (bill total)
+    - **Status**: invoice_status (draft, sent, viewed, overdue, paid, cancelled)
+    - **Status**: payment_status (pending, partial, paid, overdue, cancelled)
+    - **User**: patient_id, specialist_id
+    - **Insurance**: insurance_company, has_insurance (boolean)
+    - **Search**: Full-text search on bill_number, patient name, email, insurance company, notes
+
+    **Ordering Options:**
+    - invoice_date (default: -invoice_date, newest first)
+    - due_date
+    - total_amount
+    - balance_due
+    - created_at
+    - amount_paid
+
+    **Common Use Cases:**
+    - GET /api/bills/ - List user's bills
+    - GET /api/bills/123/ - View bill details
+    - POST /api/bills/ - Create bill from appointment
+    - GET /api/bills/123/invoice_pdf/ - Download invoice PDF
+    - POST /api/bills/123/send_invoice/ - Send to patient via email
+    - POST /api/bills/123/send_reminder/ - Send payment reminder
+    - POST /api/bills/123/mark_as_paid/ - Mark fully paid
+    - POST /api/bills/123/cancel/ - Cancel bill
+
+    **Example Filtering:**
+    - /api/bills/?start_date=2024-01-01&end_date=2024-12-31 - Bills from year 2024
+    - /api/bills/?invoice_status=pending&min_amount=100 - Unpaid bills > $100
+    - /api/bills/?has_insurance=true&insurance_company=Aetna - Aetna claims
+    - /api/bills/?search=john&payment_status=partial - John's partially paid bills
     """
 
     filter_backends = [
@@ -45,7 +111,7 @@ class BillViewSet(viewsets.ModelViewSet):
         filters.OrderingFilter,
         filters.SearchFilter,
     ]
-    filterset_class = BillFilter
+    filterset_class = BillFilterSerializer
     search_fields = [
         "bill_number",
         "patient__first_name",
@@ -67,7 +133,7 @@ class BillViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Assign permissions based on action"""
         if self.action in ["create"]:
-            return [IsAdminOrStaff() | IsSpecialist()]
+            return [IsAdminOrStaff(), IsSpecialist()]
         elif self.action in [
             "update",
             "partial_update",
@@ -78,7 +144,7 @@ class BillViewSet(viewsets.ModelViewSet):
         ]:
             return [IsAdminOrStaff()]
         elif self.action in ["invoice_pdf"]:
-            return [IsAdminOrStaff() | IsSpecialist() | IsPatient()]
+            return [IsAdminOrStaff(), IsSpecialist(), IsPatient()]
         else:
             return [IsAuthenticated()]
 
@@ -383,7 +449,7 @@ class BillViewSet(viewsets.ModelViewSet):
         )
 
 
-class BillingStatsViewSet(viewsets.ListAPIView):
+class BillingStatsViewSet(APIView):
     """
     ViewSet for billing statistics
     """
@@ -392,7 +458,7 @@ class BillingStatsViewSet(viewsets.ListAPIView):
 
     @api_error_handler
     @rate_limit(profile="READ_OPERATION", scope="billing_stats")
-    def list(self, request):
+    def get(self, request):
         """Get billing statistics"""
         stats_serializer = BillingStatsSerializer(data=request.query_params)
         stats_serializer.is_valid(raise_exception=True)

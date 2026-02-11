@@ -8,9 +8,11 @@ from .views.company_services_views import ServiceViewSet
 
 router = DefaultRouter()
 
+# Public read-only specialists endpoint
 router.register(r"specialists", SpecialistPublicViewSet, basename="specialist-public")
+# Management (CRUD) endpoint for specialists
 router.register(
-    r"specialists",
+    r"specialists-manage",
     SpecialistManagementViewSet,
     basename="specialist-management",
 )

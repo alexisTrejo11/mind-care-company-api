@@ -18,6 +18,8 @@ Including another URLconf
 from apps.specialists import urls as specialists_urls
 from apps.appointments import urls as appointments_urls
 from apps.medical import urls as medical_urls
+from apps.billing import urls as billing_urls
+from apps.core import urls as core_urls
 from django.contrib import admin
 from django.urls import path
 from apps.users.urls import urlpatterns as users_urls
@@ -26,6 +28,7 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+from apps.core import urls as core_urls
 
 urlpatterns = [
     path("api/v2/admin/", admin.site.urls),
@@ -46,3 +49,5 @@ urlpatterns += specialists_urls.urlpatterns
 urlpatterns += appointments_urls.urlpatterns
 urlpatterns += users_urls
 urlpatterns += medical_urls.urlpatterns
+urlpatterns += billing_urls.urlpatterns
+urlpatterns += core_urls.urlpatterns
