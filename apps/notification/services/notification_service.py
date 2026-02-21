@@ -50,7 +50,7 @@ class NotificationService:
         try:
             with transaction.atomic():
                 # Get user
-                user = User.objects.get(user_id=user_id, is_active=True)
+                user = User.objects.get(id=user_id)
 
                 # Get template
                 template = NotificationTemplate.objects.get(
@@ -127,7 +127,6 @@ class NotificationService:
                     expires_at=(
                         scheduled_for + timedelta(days=7) if scheduled_for else None
                     ),
-                    **kwargs,
                 )
 
                 # Queue for sending if not scheduled
@@ -168,7 +167,7 @@ class NotificationService:
         """
         try:
             with transaction.atomic():
-                user = User.objects.get(user_id=user_id, is_active=True)
+                user = User.objects.get(id=user_id)
 
                 # Get preferences
                 preferences, _ = NotificationPreference.objects.get_or_create(
@@ -311,7 +310,7 @@ class NotificationService:
         Get user notifications with pagination
         """
         try:
-            user = User.objects.get(user_id=user_id)
+            user = User.objects.get(id=user_id)
 
             queryset = Notification.objects.filter(user=user)
 
@@ -336,7 +335,7 @@ class NotificationService:
         """
         try:
             notification = Notification.objects.get(
-                id=notification_id, user__user_id=user_id
+                id=notification_id, user__id=user_id
             )
             notification.mark_as_read()
             return True
@@ -350,7 +349,7 @@ class NotificationService:
         """
         try:
             updated = Notification.objects.filter(
-                user__user_id=user_id, is_read=False
+                user__id=user_id, is_read=False
             ).update(is_read=True, read_at=timezone.now())
             return updated
         except Exception as e:

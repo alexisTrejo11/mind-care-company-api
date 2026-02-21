@@ -20,7 +20,7 @@ def generate_activation_token(user):
     cache_key = f"activation_token:{token}"
 
     # Store token in cache for 24 hours
-    cache.set(cache_key, str(user.user_id), timeout=86400)  # 24 hours
+    cache.set(cache_key, str(user.id), timeout=86400)  # 24 hours
 
     return token
 
@@ -50,7 +50,7 @@ def generate_password_reset_token(user):
     cache_key = f"password_reset:{token}"
 
     # Store token in cache for 1 hour
-    cache.set(cache_key, str(user.user_id), timeout=3600)  # 1 hour
+    cache.set(cache_key, str(user.id), timeout=3600)  # 1 hour
 
     return token
 

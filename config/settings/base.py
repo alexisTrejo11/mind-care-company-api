@@ -440,19 +440,19 @@ SIMPLE_JWT = {
 
 # Email
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
+EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = False
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@mindcarehub.com")
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:8082")
+SUPPORT_EMAIL = env("SUPPORT_EMAIL", default="support@mindcarehub.com")
 
-# Get these from https://console.twilio.com/
-TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID", default="your_account_sid_here")
-TWILIO_AUTH_TOKEN = env(
-    "TWILIO_AUTH_TOKEN", default="your_auth_token_here"
-)  # Example: your_32_character_auth_token
-TWILIO_PHONE_NUMBER = env("TWILIO_PHONE_NUMBER", default="+1234567890")
+# SMS (Twilio)
+TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = env("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = env("TWILIO_PHONE_NUMBER")
 
 
 # Celery Configuration

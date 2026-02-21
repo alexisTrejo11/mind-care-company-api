@@ -19,7 +19,7 @@ from apps.billing.serializers import (
     BillSerializer,
     BillCreateSerializer,
     BillUpdateSerializer,
-    BillFilterSerializer,
+    BillFilterSet,
     BillingStatsSerializer,
     PaymentCreateSerializer,
     PaymentSerializer,
@@ -111,7 +111,7 @@ class BillViewSet(viewsets.ModelViewSet):
         filters.OrderingFilter,
         filters.SearchFilter,
     ]
-    filterset_class = BillFilterSerializer
+    filterset_class = BillFilterSet
     search_fields = [
         "bill_number",
         "patient__first_name",

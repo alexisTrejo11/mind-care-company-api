@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional
 
 
 class BillFilterSerializer(serializers.Serializer):
@@ -139,6 +138,180 @@ class PaymentFilterSerializer(serializers.Serializer):
             )
 
         return data
+
+
+class BillingStatsSerializer(serializers.Serializer):
+    """Serializer for billing statistics parameters"""
+
+    period = serializers.ChoiceField(
+        choices=["today", "week", "month", "year", "all_time"], default="month"
+    )
+    specialist_id = serializers.IntegerField(required=False)
+
+
+from rest_framework import serializers
+from datetime import datetime, date
+from decimal import Decimal
+import django_filters
+from django.db.models import Q
+
+from apps.billing.models import Bill, Payment
+
+
+class BillFilterSet(django_filters.FilterSet):
+    """FilterSet for Bill filtering"""
+
+    # Date range filters
+    start_date = django_filters.DateFilter(
+        field_name="invoice_date", lookup_expr="gte", label="Start Date"
+    )
+    end_date = django_filters.DateFilter(
+        field_name="invoice_date", lookup_expr="lte", label="End Date"
+    )
+
+    due_date_start = django_filters.DateFilter(
+        field_name="due_date", lookup_expr="gte", label="Due Date Start"
+    )
+    due_date_end = django_filters.DateFilter(
+        field_name="due_date", lookup_expr="lte", label="Due Date End"
+    )
+
+    # Amount filters
+    min_amount = django_filters.NumberFilter(
+        field_name="total_amount", lookup_expr="gte", label="Minimum Amount"
+    )
+    max_amount = django_filters.NumberFilter(
+        field_name="total_amount", lookup_expr="lte", label="Maximum Amount"
+    )
+
+    # Status filters
+    invoice_status = django_filters.ChoiceFilter(
+        field_name="invoice_status",
+        choices=Bill.INVOICE_STATUS_CHOICES,
+        label="Invoice Status",
+    )
+    has_insurance = django_filters.BooleanFilter(
+        field_name="insurance_company",
+        method="filter_has_insurance",
+        label="Has Insurance",
+    )
+
+    # User filters
+    patient_id = django_filters.NumberFilter(
+        field_name="patient_id", label="Patient ID"
+    )
+
+    # Search filter using method
+    search = django_filters.CharFilter(
+        method="filter_search", label="Search (bill number, patient, insurance, notes)"
+    )
+
+    class Meta:
+        model = Bill
+        fields = [
+            "start_date",
+            "end_date",
+            "due_date_start",
+            "due_date_end",
+            "min_amount",
+            "max_amount",
+            "invoice_status",
+            "has_insurance",
+            "patient_id",
+            "search",
+        ]
+
+    def filter_has_insurance(self, queryset, name, value):
+        """Filter bills by whether they have insurance"""
+        if value:
+            return queryset.exclude(insurance_company__isnull=True).exclude(
+                insurance_company=""
+            )
+        return queryset.filter(
+            Q(insurance_company__isnull=True) | Q(insurance_company="")
+        )
+
+    def filter_search(self, queryset, name, value):
+        """Search across multiple fields"""
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(bill_number__icontains=value)
+            | Q(patient__first_name__icontains=value)
+            | Q(patient__last_name__icontains=value)
+            | Q(patient__email__icontains=value)
+            | Q(insurance_company__icontains=value)
+            | Q(notes__icontains=value)
+        )
+
+
+class PaymentFilterSet(django_filters.FilterSet):
+    """FilterSet for Payment filtering"""
+
+    # Date range filters
+    start_date = django_filters.DateFilter(
+        field_name="payment_date", lookup_expr="date__gte", label="Start Date"
+    )
+    end_date = django_filters.DateFilter(
+        field_name="payment_date", lookup_expr="date__lte", label="End Date"
+    )
+
+    # Payment filters
+    payment_method = django_filters.ChoiceFilter(
+        field_name="payment_method",
+        choices=Payment.PAYMENT_METHOD_CHOICES,
+        label="Payment Method",
+    )
+    status = django_filters.ChoiceFilter(
+        field_name="status",
+        choices=Payment.PAYMENT_STATUS_CHOICES,
+        label="Status",
+    )
+
+    # Amount filters
+    min_amount = django_filters.NumberFilter(
+        field_name="amount", lookup_expr="gte", label="Minimum Amount"
+    )
+    max_amount = django_filters.NumberFilter(
+        field_name="amount", lookup_expr="lte", label="Maximum Amount"
+    )
+
+    # User filters
+    patient_id = django_filters.NumberFilter(
+        field_name="patient_id", label="Patient ID"
+    )
+    bill_id = django_filters.NumberFilter(field_name="bill_id", label="Bill ID")
+
+    # Search filter using method
+    search = django_filters.CharFilter(
+        method="filter_search", label="Search (payment number, patient, notes)"
+    )
+
+    class Meta:
+        model = Payment
+        fields = [
+            "start_date",
+            "end_date",
+            "payment_method",
+            "status",
+            "min_amount",
+            "max_amount",
+            "patient_id",
+            "bill_id",
+            "search",
+        ]
+
+    def filter_search(self, queryset, name, value):
+        """Search across multiple fields"""
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(payment_number__icontains=value)
+            | Q(patient__first_name__icontains=value)
+            | Q(patient__last_name__icontains=value)
+            | Q(patient__email__icontains=value)
+            | Q(notes__icontains=value)
+        )
 
 
 class BillingStatsSerializer(serializers.Serializer):

@@ -99,6 +99,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         default="patient",
         help_text="Account type: 'patient' for healthcare recipient, 'specialist' for provider",
     )
+    specialist_id = serializers.IntegerField(
+        required=False,
+        help_text="Optional specialist ID for patients linked to a specific provider (not required for specialists)",
+    )
+    specialist_license_number = serializers.CharField(
+        required=False,
+        help_text="Optional license number for specialists (required if user_type is 'specialist')",
+    )
 
     class Meta:
         model = User
@@ -110,6 +118,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             "phone",
             "date_of_birth",
             "user_type",
+            "specialist_id",
+            "specialist_license_number",
         ]
         extra_kwargs = {
             "first_name": {
@@ -133,6 +143,39 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 "format": "%Y-%m-%d",
             },
         }
+
+    def validate(self, attrs):
+        """Custom validation for user registration data"""
+        user_type = attrs.get("user_type", "patient")
+        specialist_id = attrs.get("specialist_id")
+        specialist_license_number = attrs.get("specialist_license_number")
+
+        if user_type == "specialist":
+            if not specialist_license_number or not specialist_id:
+                raise serializers.ValidationError(
+                    {
+                        "specialist_license_number": "License number is required for specialists.",
+                        "specialist_id": "Specialist ID is required for specialists.",
+                    }
+                )
+            else:
+                from apps.specialists.models import Specialist
+
+                if not Specialist.objects.filter(
+                    id=specialist_id, license_number=specialist_license_number
+                ).exists():
+                    raise serializers.ValidationError(
+                        {"specialist_id": "Specialist with this ID does not exist."}
+                    )
+        else:  # user_type == "patient"
+            if specialist_id is not None:
+                raise serializers.ValidationError(
+                    {
+                        "specialist_id": "Specialist ID should not be provided for patients."
+                    }
+                )
+
+        return super().validate(attrs)
 
 
 @extend_schema_serializer(component_name="UserLogin")

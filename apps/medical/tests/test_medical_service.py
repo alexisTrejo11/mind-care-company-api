@@ -14,6 +14,7 @@ from apps.appointments.models import Appointment
 from apps.specialists.models import Specialist
 from apps.core.exceptions.base_exceptions import (
     BusinessRuleError,
+    PrivacyError,
     ValidationError,
     NotFoundError,
     AuthorizationError,
@@ -389,7 +390,7 @@ class MedicalRecordServiceTestCase(TestCase):
 
         record = MedicalRecordService.create_medical_record(
             user=self.specialist_user,
-            appointment_id=new_appointment.id,
+            appointment=new_appointment,
             diagnosis="Patient shows anxiety diagnosis with assessment of moderate severity",
             prescription="Medication B - 20mg daily",
             notes="Follow up in 2 weeks",
@@ -407,8 +408,9 @@ class MedicalRecordServiceTestCase(TestCase):
         new_appointment = Appointment.objects.create(
             patient=self.patient_user,
             specialist=self.specialist,
-            appointment_date=appointment_datetime.date(),
+            appointment_date=appointment_datetime,
             start_time=appointment_datetime,
+            end_time=appointment_datetime + timedelta(hours=1),
             duration_minutes=60,
             appointment_type="consultation",
             status="completed",
@@ -418,7 +420,7 @@ class MedicalRecordServiceTestCase(TestCase):
 
         record = MedicalRecordService.create_medical_record(
             user=self.specialist_user,
-            appointment_id=new_appointment.id,
+            appointment=new_appointment,
             diagnosis="Depression diagnosis with clinical assessment completed",
             follow_up_date=follow_up,
             confidentiality_level="standard",
@@ -426,16 +428,16 @@ class MedicalRecordServiceTestCase(TestCase):
 
         self.assertEqual(record.follow_up_date, follow_up)
 
-    def test_create_medical_record_appointment_not_found(self):
-        """Test creation fails when appointment doesn't exist"""
-        with self.assertRaises(NotFoundError) as context:
+    def test_create_medical_record_appointment_not_provided(self):
+        """Test creation fails when appointment is not provided"""
+        with self.assertRaises(ValidationError) as context:
             MedicalRecordService.create_medical_record(
                 user=self.specialist_user,
-                appointment_id=99999,
+                appointment=None,
                 diagnosis="Test diagnosis with assessment",
                 confidentiality_level="standard",
             )
-        self.assertIn("not found", str(context.exception))
+        self.assertIn("must be provided", str(context.exception))
 
     # ==================== Update Medical Record Tests ====================
 
@@ -491,7 +493,7 @@ class MedicalRecordServiceTestCase(TestCase):
 
     def test_delete_medical_record_unauthorized(self):
         """Test deletion fails when user unauthorized"""
-        with self.assertRaises(AuthorizationError) as context:
+        with self.assertRaises(PrivacyError) as context:
             MedicalRecordService.delete_medical_record(
                 user=self.specialist_user, medical_record=self.medical_record
             )

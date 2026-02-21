@@ -37,7 +37,7 @@ class RateLimitProfiles:
     # ========== ACCOUNT MANAGEMENT ==========
     RESTRICTED = {
         "key_type": "ip",
-        "rate": "3/1hour",  # Prevent account creation abuse
+        "rate": "3/1min",  # Prevent account creation abuse
         "fallback_key": "ip",
         "description": "For registration, account activation, and critical modifications",
     }

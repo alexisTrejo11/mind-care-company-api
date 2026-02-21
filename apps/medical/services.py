@@ -123,6 +123,10 @@ class MedicalRecordService:
             )
             raise AuthorizationError(detail="Authentication required")
 
+        if not appointment:
+            logger.error("Appointment not provided for medical record creation")
+            raise ValidationError(detail="Appointment must be provided")
+
         if appointment.status != "completed":
             logger.warning(
                 f"Attempt to create medical record for non-completed appointment {appointment.id} (status: {appointment.status})"
@@ -268,12 +272,6 @@ class MedicalRecordService:
     @transaction.atomic
     def create_medical_record(cls, user, **validated_data):
         """Create a new medical record with business logic validation"""
-
-        appointment_id = validated_data.pop("appointment_id")
-        logger.info(
-            f"User {user.email} initiating medical record creation for appointment {appointment_id}"
-        )
-
         appointment = validated_data.get("appointment")
         if not appointment:
             raise ValidationError(detail="Appointment must be provided")

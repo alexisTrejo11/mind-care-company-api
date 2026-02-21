@@ -32,17 +32,22 @@ def send_notification(self, template_name: str, user_id: str, context: dict, **k
             }
         )
     """
+    logger.info(
+        f"Queuing notification for user {user_id} with template {template_name}"
+    )
     try:
         notification = NotificationService.create_notification(
             user_id=user_id, template_name=template_name, context=context, **kwargs
         )
 
-        return {
+        result = {
             "status": "queued",
             "notification_id": notification.id,
             "user_id": user_id,
             "template": template_name,
         }
+        logger.info(f"Notification queued successfully: {result}")
+        return result
 
     except Exception as exc:
         logger.error(f"Failed to queue notification: {str(exc)}")
