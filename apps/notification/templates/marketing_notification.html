@@ -1,0 +1,197 @@
+{% extends "base.html" %} {% block content %}
+<h2>{{ title }}</h2>
+
+<p>Hola {{ user.get_full_name }},</p>
+
+<div class="message-box">
+  <p>{{ message }}</p>
+</div>
+
+{% if campaign_type == 'newsletter' %}
+<div style="margin: 30px 0">
+  <h3 style="color: #2d3748; margin-bottom: 20px">📰 Novedades de este mes</h3>
+
+  {% if articles %} {% for article in articles %}
+  <div
+    style="
+      background-color: #f7fafc;
+      padding: 20px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    "
+  >
+    <h4 style="color: #2d3748; margin-bottom: 10px">{{ article.title }}</h4>
+    <p style="color: #4a5568; margin-bottom: 10px">{{ article.excerpt }}</p>
+    <a
+      href="{{ article.url }}"
+      style="color: #667eea; text-decoration: none; font-weight: 600"
+    >
+      Leer más →
+    </a>
+  </div>
+  {% endfor %} {% endif %}
+</div>
+{% endif %} {% if campaign_type == 'promotion' %}
+<div
+  style="
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+    margin: 30px 0;
+  "
+>
+  <div style="font-size: 48px; margin-bottom: 15px">🎁</div>
+  <h3 style="color: white; margin-bottom: 15px; font-size: 24px">
+    {{ promo_title|default:"Oferta especial" }}
+  </h3>
+  <p style="color: white; opacity: 0.95; margin-bottom: 20px; font-size: 18px">
+    {{ promo_description }}
+  </p>
+  {% if promo_code %}
+  <div
+    style="
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+    "
+  >
+    <p style="color: white; margin: 0; font-size: 14px; opacity: 0.9">
+      Código de descuento:
+    </p>
+    <p
+      style="
+        color: white;
+        margin: 10px 0 0 0;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 3px;
+      "
+    >
+      {{ promo_code }}
+    </p>
+  </div>
+  {% endif %} {% if promo_expiry %}
+  <p style="color: white; opacity: 0.85; font-size: 14px; margin-top: 15px">
+    ⏰ Válido hasta: {{ promo_expiry|date:"d/m/Y" }}
+  </p>
+  {% endif %}
+</div>
+
+{% if promo_url %}
+<center>
+  <a href="{{ promo_url }}" class="button">Aprovechar oferta</a>
+</center>
+{% endif %} {% endif %} {% if campaign_type == 'tips' %}
+<div style="margin: 30px 0">
+  <h3 style="color: #2d3748; margin-bottom: 20px">💡 Consejos de bienestar</h3>
+
+  {% if tips %}
+  <div style="display: grid; gap: 15px">
+    {% for tip in tips %}
+    <div
+      style="
+        background-color: #e8f5e9;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #4caf50;
+      "
+    >
+      <h4 style="color: #2e7d32; margin-bottom: 10px">{{ tip.title }}</h4>
+      <p style="color: #1b5e20; margin: 0">{{ tip.content }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %} {% if campaign_type == 'event' %}
+<div class="info-section">
+  <h3>📅 Detalles del evento</h3>
+
+  {% if event_name %}
+  <div class="info-item">
+    <span class="info-label">Evento:</span>
+    <span class="info-value">{{ event_name }}</span>
+  </div>
+  {% endif %} {% if event_date %}
+  <div class="info-item">
+    <span class="info-label">Fecha:</span>
+    <span class="info-value">{{ event_date|date:"d/m/Y" }}</span>
+  </div>
+  {% endif %} {% if event_time %}
+  <div class="info-item">
+    <span class="info-label">Hora:</span>
+    <span class="info-value">{{ event_time }}</span>
+  </div>
+  {% endif %} {% if event_location %}
+  <div class="info-item">
+    <span class="info-label">Ubicación:</span>
+    <span class="info-value">{{ event_location }}</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if event_register_url %}
+<center>
+  <a href="{{ event_register_url }}" class="button">Registrarme al evento</a>
+</center>
+{% endif %} {% endif %} {% if resources %}
+<div style="margin: 30px 0">
+  <h3 style="color: #2d3748; margin-bottom: 20px">📚 Recursos recomendados</h3>
+
+  <div style="display: grid; gap: 15px">
+    {% for resource in resources %}
+    <div
+      style="
+        background-color: #f7fafc;
+        padding: 15px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+      "
+    >
+      <div style="flex: 1">
+        <h4 style="color: #2d3748; margin-bottom: 5px">{{ resource.title }}</h4>
+        <p style="color: #718096; font-size: 14px; margin: 0">
+          {{ resource.type }}
+        </p>
+      </div>
+      <a
+        href="{{ resource.url }}"
+        style="
+          color: #667eea;
+          text-decoration: none;
+          font-weight: 600;
+          white-space: nowrap;
+        "
+      >
+        Ver →
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<p style="font-size: 14px; color: #718096; text-align: center">
+  <strong>¿No quieres recibir estos correos?</strong><br />
+  Puedes
+  <a href="{{ unsubscribe_url }}" style="color: #667eea"
+    >actualizar tus preferencias</a
+  >
+  o <a href="{{ unsubscribe_url }}" style="color: #667eea">darte de baja</a> en
+  cualquier momento.
+</p>
+
+<p style="text-align: center">
+  ¿Preguntas? Contáctanos en
+  <a href="mailto:marketing@mindcarehub.com" style="color: #667eea"
+    >marketing@mindcarehub.com</a
+  >
+</p>
+{% endblock %}

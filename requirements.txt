@@ -1,0 +1,89 @@
+# ===== CORE =====
+Django==5.1.5
+djangorestframework
+django-cors-headers
+django-environ
+
+# ===== DATABASE =====
+psycopg2-binary
+django-timezone-field
+
+# ===== AUTH & SECURITY =====
+djangorestframework-simplejwt
+cryptography
+django-ratelimit
+django-guardian
+django-axes
+django-encrypted-model-fields
+
+# ===== API & DOCS =====
+drf-spectacular
+drf-spectacular-sidecar
+django-filter
+
+# ===== STORAGE & FILES =====
+Pillow
+django-storages
+boto3
+reportlab
+weasyprint
+
+# ===== CACHE =====
+redis
+django-redis
+hiredis
+
+# ===== TASKS =====
+celery
+django-celery-beat
+django-celery-results
+
+# ===== NOTIFICATIONS =====
+django-anymail
+twilio
+django-notifications-hq
+
+# ===== PAYMENTS =====
+stripe
+
+# ===== MONITORING =====
+sentry-sdk
+django-health-check
+
+# ===== AUDIT & COMPLIANCE =====
+django-auditlog
+django-reversion
+
+# ===== REAL-TIME =====
+channels
+channels-redis
+daphne
+
+# ===== VIDEO CONFERENCING =====
+#agora-python-server-sdk
+
+# ===== UTILITIES =====
+python-dateutil
+python-slugify
+requests
+bleach
+
+# ===== TESTING =====
+pytest-django
+pytest-cov
+factory-boy
+faker
+# ===== CODE QUALITY =====
+black
+flake8
+isort
+
+# ===== PRODUCTION =====
+gunicorn
+whitenoise
+
+# ===== FUTURE =====
+# pandas==2.2.0  # si necesitas análisis complejo
+# django-elasticsearch-dsl==8.0  # para búsqueda avanzada
+# python-fhir==4.0.1  # si necesitas interoperabilidad FHIR
+# google-api-python-client==2.116.0  # calendar integration

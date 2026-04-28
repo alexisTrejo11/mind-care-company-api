@@ -1,0 +1,236 @@
+{% extends "base.html" %} {% block content %}
+<h2>{{ title }}</h2>
+
+<p>Hola {{ user.get_full_name }},</p>
+
+<div class="message-box">
+  <p>{{ message }}</p>
+</div>
+
+{% if transaction_status == 'success' %}
+<div
+  style="
+    background-color: #e8f5e9;
+    border-left: 4px solid #4caf50;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #2e7d32; margin-bottom: 15px">✅ Transacción exitosa</h3>
+  <p style="margin: 0; color: #1b5e20">
+    Tu pago ha sido procesado correctamente.
+  </p>
+</div>
+{% endif %} {% if transaction_status == 'pending' %}
+<div
+  style="
+    background-color: #fef5e7;
+    border-left: 4px solid #f39c12;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #7d6608; margin-bottom: 15px">⏳ Pago pendiente</h3>
+  <p style="margin: 0; color: #7d6608">
+    Tu pago está en proceso de verificación.
+  </p>
+</div>
+{% endif %} {% if transaction_status == 'failed' %}
+<div
+  style="
+    background-color: #fff5f5;
+    border-left: 4px solid #e53e3e;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #c53030; margin-bottom: 15px">❌ Pago rechazado</h3>
+  <p style="margin: 0; color: #742a2a">
+    No pudimos procesar tu pago. Intenta nuevamente.
+  </p>
+</div>
+{% endif %} {% if invoice_number %}
+<div class="info-section">
+  <h3>💳 Detalles de la factura</h3>
+
+  <div class="info-item">
+    <span class="info-label">Número de factura:</span>
+    <span class="info-value">{{ invoice_number }}</span>
+  </div>
+
+  {% if invoice_date %}
+  <div class="info-item">
+    <span class="info-label">Fecha de emisión:</span>
+    <span class="info-value">{{ invoice_date|date:"d/m/Y" }}</span>
+  </div>
+  {% endif %} {% if due_date %}
+  <div class="info-item">
+    <span class="info-label">Fecha de vencimiento:</span>
+    <span class="info-value">{{ due_date|date:"d/m/Y" }}</span>
+  </div>
+  {% endif %} {% if payment_method %}
+  <div class="info-item">
+    <span class="info-label">Método de pago:</span>
+    <span class="info-value">{{ payment_method }}</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %} {% if items %}
+<div style="margin: 30px 0">
+  <h3 style="color: #2d3748; margin-bottom: 20px">📋 Concepto de la factura</h3>
+
+  <div style="background-color: #f7fafc; border-radius: 8px; overflow: hidden">
+    <table style="width: 100%; border-collapse: collapse">
+      <tr style="background-color: #edf2f7">
+        <th
+          style="
+            padding: 12px;
+            text-align: left;
+            color: #2d3748;
+            font-weight: 600;
+          "
+        >
+          Concepto
+        </th>
+        <th
+          style="
+            padding: 12px;
+            text-align: right;
+            color: #2d3748;
+            font-weight: 600;
+          "
+        >
+          Cantidad
+        </th>
+        <th
+          style="
+            padding: 12px;
+            text-align: right;
+            color: #2d3748;
+            font-weight: 600;
+          "
+        >
+          Monto
+        </th>
+      </tr>
+      {% for item in items %}
+      <tr style="border-bottom: 1px solid #cbd5e0">
+        <td style="padding: 12px; color: #4a5568">{{ item.description }}</td>
+        <td style="padding: 12px; text-align: right; color: #4a5568">
+          {{ item.quantity }}
+        </td>
+        <td
+          style="
+            padding: 12px;
+            text-align: right;
+            color: #2d3748;
+            font-weight: 600;
+          "
+        >
+          ${{ item.amount|floatformat:2 }}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %} {% if subtotal or tax or total %}
+<div
+  style="
+    background-color: #edf2f7;
+    padding: 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+  "
+>
+  <div
+    style="display: flex; justify-content: space-between; margin-bottom: 10px"
+  >
+    <span style="color: #4a5568">Subtotal:</span>
+    <span style="color: #2d3748; font-weight: 600"
+      >${{ subtotal|floatformat:2 }}</span
+    >
+  </div>
+
+  {% if tax %}
+  <div
+    style="display: flex; justify-content: space-between; margin-bottom: 10px"
+  >
+    <span style="color: #4a5568">Impuestos:</span>
+    <span style="color: #2d3748; font-weight: 600"
+      >${{ tax|floatformat:2 }}</span
+    >
+  </div>
+  {% endif %} {% if discount %}
+  <div
+    style="
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      color: #4caf50;
+    "
+  >
+    <span>Descuento:</span>
+    <span style="font-weight: 600">-${{ discount|floatformat:2 }}</span>
+  </div>
+  {% endif %}
+
+  <div
+    style="
+      border-top: 2px solid #cbd5e0;
+      padding-top: 10px;
+      display: flex;
+      justify-content: space-between;
+    "
+  >
+    <span style="color: #2d3748; font-weight: 700; font-size: 18px"
+      >Total:</span
+    >
+    <span style="color: #667eea; font-weight: 700; font-size: 18px"
+      >${{ total|floatformat:2 }}</span
+    >
+  </div>
+</div>
+{% endif %} {% if payment_url %}
+<center>
+  <a href="{{ payment_url }}" class="button">Realizar pago</a>
+</center>
+{% endif %} {% if invoice_url %}
+<center>
+  <a href="{{ invoice_url }}" class="button">Descargar factura</a>
+</center>
+{% endif %} {% if payment_plan %}
+<div
+  style="
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #1565c0; margin-bottom: 10px">📅 Plan de pago</h3>
+  <p style="margin: 0; color: #0d47a1">{{ payment_plan }}</p>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<p style="font-size: 14px; color: #718096">
+  <strong>Notas importantes:</strong><br />
+  • Conserva esta factura para tu registros<br />
+  • Los pagos deben realizarse en la fecha indicada<br />
+  • Puedes solicitar una prórroga si lo necesitas<br />
+  • Verifica que los datos sean correctos
+</p>
+
+<p>
+  Si tienes preguntas sobre tu factura o necesitas un recibo, contáctanos en
+  <a href="mailto:facturacion@mindcarehub.com" style="color: #667eea"
+    >facturacion@mindcarehub.com</a
+  >
+</p>
+{% endblock %}

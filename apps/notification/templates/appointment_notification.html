@@ -1,0 +1,147 @@
+{% extends "base.html" %} {% block content %}
+<h2>{{ title }}</h2>
+
+<p>Hola {{ user.get_full_name }},</p>
+
+<div class="message-box">
+  <p>{{ message }}</p>
+</div>
+
+{% if appointment_confirmed == True %}
+<div
+  style="
+    background-color: #e8f5e9;
+    border-left: 4px solid #4caf50;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #2e7d32; margin-bottom: 15px">✅ Cita confirmada</h3>
+  <p style="margin: 0; color: #1b5e20">
+    Tu cita ha sido programada exitosamente.
+  </p>
+</div>
+{% endif %} {% if appointment_cancelled == True %}
+<div
+  style="
+    background-color: #fff5f5;
+    border-left: 4px solid #e53e3e;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #c53030; margin-bottom: 15px">❌ Cita cancelada</h3>
+  <p style="margin: 0; color: #742a2a">Tu cita ha sido cancelada.</p>
+</div>
+{% endif %} {% if appointment_rescheduled == True %}
+<div
+  style="
+    background-color: #fef5e7;
+    border-left: 4px solid #f39c12;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #7d6608; margin-bottom: 15px">🔄 Cita reprogramada</h3>
+  <p style="margin: 0; color: #7d6608">Tu cita ha sido reprogramada.</p>
+</div>
+{% endif %}
+
+<div class="info-section">
+  <h3>📅 Detalles de la cita</h3>
+
+  {% if appointment_date %}
+  <div class="info-item">
+    <span class="info-label">Fecha:</span>
+    <span class="info-value">{{ appointment_date|date:"d/m/Y" }}</span>
+  </div>
+  {% endif %} {% if appointment_time %}
+  <div class="info-item">
+    <span class="info-label">Hora:</span>
+    <span class="info-value">{{ appointment_time }}</span>
+  </div>
+  {% endif %} {% if specialist_name %}
+  <div class="info-item">
+    <span class="info-label">Especialista:</span>
+    <span class="info-value">{{ specialist_name }}</span>
+  </div>
+  {% endif %} {% if appointment_type %}
+  <div class="info-item">
+    <span class="info-label">Tipo de consulta:</span>
+    <span class="info-value">{{ appointment_type }}</span>
+  </div>
+  {% endif %} {% if appointment_location %}
+  <div class="info-item">
+    <span class="info-label">Ubicación:</span>
+    <span class="info-value">{{ appointment_location }}</span>
+  </div>
+  {% endif %} {% if duration %}
+  <div class="info-item">
+    <span class="info-label">Duración:</span>
+    <span class="info-value">{{ duration }} minutos</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if join_url %}
+<center>
+  <a href="{{ join_url }}" class="button">Unirse a la cita</a>
+</center>
+{% endif %} {% if reschedule_url %}
+<center>
+  <a href="{{ reschedule_url }}" class="button">Reprogramar cita</a>
+</center>
+{% endif %} {% if cancel_url %}
+<center>
+  <a
+    href="{{ cancel_url }}"
+    class="button"
+    style="background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%)"
+  >
+    Cancelar cita
+  </a>
+</center>
+{% endif %} {% if reminders %}
+<div style="margin: 30px 0">
+  <h3 style="color: #2d3748; margin-bottom: 20px">⏰ Recordatorios</h3>
+  <ul style="color: #4a5568; margin-left: 20px; line-height: 2">
+    {% for reminder in reminders %}
+    <li>{{ reminder }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %} {% if notes %}
+<div
+  style="
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 4px;
+  "
+>
+  <h3 style="color: #1565c0; margin-bottom: 10px">📝 Notas</h3>
+  <p style="margin: 0; color: #0d47a1">{{ notes }}</p>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<p style="font-size: 14px; color: #718096">
+  <strong>Recomendaciones:</strong><br />
+  • Llega 10 minutos antes de la cita<br />
+  • Verifica tu conexión a internet si es virtual<br />
+  • Ten a mano tu documento de identidad<br />
+  • Anota tus preguntas en una lista
+</p>
+
+<p>
+  Si tienes alguna pregunta o necesitas cambios, contáctanos en
+  <a href="mailto:citas@mindcarehub.com" style="color: #667eea"
+    >citas@mindcarehub.com</a
+  >
+</p>
+{% endblock %}

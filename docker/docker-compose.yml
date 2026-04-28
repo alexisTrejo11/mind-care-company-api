@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mindcare_postgres
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-at_mind_care_hub_db}
+    ports:
+      - "5431:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mindcare_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: mindcare_redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mindcare_network
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/dockerfile
+    container_name: mindcare_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=${DB_NAME:-at_mind_care_hub_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POPULATE_DUMMY_DATA=${POPULATE_DB:-false}
+    ports:
+      - "8001:8000"
+    volumes:
+      - ..:/app
+      - logs_volume:/app/logs
+    networks:
+      - mindcare_network
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  logs_volume:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  mindcare_network:
+    driver: bridge
+    name: mindcare_network
